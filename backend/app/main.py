@@ -69,6 +69,8 @@ def create_application() -> FastAPI:
         dialect: str
         target: str
         fallback_active: bool
+        postgres_container_verified: bool | None = None
+        postgres_version: str | None = None
         notice: str | None = None
         error: str | None = None
 
