@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 logger = logging.getLogger("coderazz.database")
 
@@ -45,6 +46,7 @@ def create_engine_and_factory() -> tuple[AsyncEngine, async_sessionmaker[AsyncSe
         db_url,
         echo=settings.DEBUG and settings.ENV == "development",
         future=True,
+        poolclass=NullPool,
         connect_args=connect_args,
     )
 

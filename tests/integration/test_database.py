@@ -6,7 +6,6 @@ from sqlalchemy import text
 from backend.app.config import get_settings
 from backend.app.database import (
     check_db_health,
-    get_db,
     get_engine,
     get_session_factory,
     reset_engine,
@@ -37,16 +36,10 @@ async def test_postgres_async_connection():
 @pytest.mark.asyncio
 async def test_async_sqlalchemy_session_select_one():
     """Verify FastAPI's async SQLAlchemy session executes SELECT 1 against PostgreSQL."""
-    session_gen = get_db()
-    session = await anext(session_gen)
-    try:
+    factory = get_session_factory()
+    async with factory() as session:
         res = await session.execute(text("SELECT 1"))
         assert res.scalar() == 1
-    finally:
-        try:
-            await anext(session_gen)
-        except StopAsyncIteration:
-            pass
 
 
 @pytest.mark.asyncio

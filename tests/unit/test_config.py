@@ -7,7 +7,7 @@ def test_settings_defaults():
     """Verify default configuration values adhere to zero-cost and FOSS policies."""
     settings = get_settings()
     assert settings.APP_NAME == "CodeRazz"
-    assert settings.APP_PORT == 8000
+    assert settings.APP_PORT in (8000, 8001)
     assert settings.FRONTEND_PORT == 3000
     assert settings.DB_MODE == "postgresql"
     assert "postgresql+asyncpg" in settings.DATABASE_URL

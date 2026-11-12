@@ -150,3 +150,31 @@ Developers need to run early iterations locally even if Docker is temporarily of
 ### Consequences
 - **Pros:** Fast zero-friction local development without sacrificing production PostgreSQL standards.
 - **Cons:** Must maintain dialect compatibility in SQLAlchemy models.
+
+---
+
+## ADR-008: Authentication, Authorization (RBAC) & Session Management
+
+### Context
+CodeRazz requires a secure, production-grade identity and access control foundation. In accordance with our zero-budget mandate, no paid third-party auth services (Auth0, Clerk, Firebase, AWS Cognito) may be introduced. Authentication must support four distinct personas (Student, Teacher, Annotator, Admin) with rigid role separation, protection against privilege escalation, and session revocation capabilities.
+
+### Decision
+1. **Password Hashing:**
+   - Standardize on **Argon2id** via `argon2-cffi` for password hashing and verification, satisfying modern OWASP password storage requirements.
+   - Plaintext passwords and password hashes are never exposed through API responses.
+2. **Token & Session Architecture:**
+   - **Access Tokens:** Short-lived JSON Web Tokens (JWT, 30-minute validity) signed using HMAC-SHA256 (`HS256`) and an application secret key. Decoded and validated via FastAPI dependency `get_current_user`.
+   - **Refresh Tokens:** High-entropy cryptographically random strings (`secrets.token_urlsafe(48)`), stored solely as SHA-256 hashes (`token_hash`) in the `refresh_tokens` database table with expiration timestamps and `revoked` boolean flags.
+   - **Token Rotation & Revocation:** Every refresh request invalidates the consumed refresh token and issues a newly rotated pair, preventing replay attacks. Explicit logout marks tokens as revoked.
+3. **Role-Based Access Control (RBAC):**
+   - Four distinct roles: `STUDENT`, `TEACHER`, `ANNOTATOR`, `ADMIN`.
+   - RBAC is strictly enforced on backend FastAPI endpoints using dependency injection (`require_role(*roles)`), returning `403 Forbidden` for unauthorized role attempts.
+4. **Privilege Escalation Prevention:**
+   - Public registration (`/api/v1/auth/register`) only accepts `STUDENT` or `TEACHER` roles (defaulting to `STUDENT`). Any attempt to submit `ADMIN` or `ANNOTATOR` during registration or user profile self-update is rejected with `400 Bad Request`.
+   - Initial system administrator is bootstrapped via offline CLI script (`scripts/create_admin.py`).
+   - Subsequent role changes require an authenticated `ADMIN` calling `PUT /api/v1/auth/users/{user_id}/role`.
+
+### Consequences
+- **Pros:** Zero-cost, 100% self-hosted, OWASP-compliant, secure session lifecycle with instant revocation capability, and server-side RBAC protection.
+- **Cons:** Secret key management must be strictly handled through `.env` configurations; database lookups are required for refresh token rotation.
+

@@ -23,10 +23,13 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
 
-    # Security
+    # Security & Authentication
     SECRET_KEY: str = "coderazz_dev_secret_key_change_in_production_32chars"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ADMIN_INITIAL_EMAIL: str = "admin@coderazz.edu"
+    ADMIN_INITIAL_PASSWORD: str = "AdminInitial#2026"
 
     # Database Configuration (Explicit Modes: 'postgresql' or 'sqlite')
     DB_MODE: Literal["postgresql", "sqlite"] = "postgresql"

@@ -59,23 +59,35 @@ flowchart TD
 ---
 
 ### Phase 2: Authentication, RBAC & Database Schema
-- [ ] **Database Models:**
-  - Implement SQLAlchemy models: `User`, `Class`, `ClassMember`, `Problem`, `TestCase`, `Submission`, `ExecutionResult`, `MisconceptionTaxonomy`, `Diagnosis`, `DiagnosisEvidence`, `Hint`, `HintFeedback`, `Annotation`, `StudentMisconceptionProfile`, `AuditLog`.
-  - Generate initial Alembic migration scripts.
-- [ ] **Authentication & Security:**
-  - Password hashing with bcrypt / argon2.
-  - JWT token generation and verification middleware.
-  - Implement role-based dependency guards (`require_role("student")`, `require_role("teacher")`, `require_role("annotator")`, `require_role("admin")`).
-- [ ] **Auth API Endpoints:**
+- [x] **Database Models & Migrations:**
+  - Implement SQLAlchemy models: `User` (with roles: `STUDENT`, `TEACHER`, `ANNOTATOR`, `ADMIN`), and `RefreshToken` (with SHA-256 hash and revocation flag).
+  - Generate and apply Alembic migration (`c7aea71fa178_create_users_and_refresh_tokens_tables.py`) to PostgreSQL 16 on port 5433.
+- [x] **Authentication & Security:**
+  - Argon2id password hashing and verification using `argon2-cffi`.
+  - JWT access token generation and verification with HMAC-SHA256.
+  - Rotating refresh tokens with SHA-256 hash storage and database-backed revocation.
+  - Implement role-based dependency guards (`get_current_user`, `require_role(*roles)`).
+  - Privilege escalation protection (disallowing self-assigned ADMIN/ANNOTATOR during registration).
+  - Seed initial administrator via offline CLI script (`scripts/create_admin.py`).
+- [x] **Auth API Endpoints:**
   - `POST /api/v1/auth/register` (student / teacher signup with validation).
-  - `POST /api/v1/auth/login` (returns JWT + user profile).
-  - `GET /api/v1/auth/me` (active session verification).
-- [ ] **Frontend Auth UI:**
-  - Modern sign-in and registration pages with form validation and loading states.
-  - JWT storage, session restoration, and auth state management.
-- [ ] **Verification:**
-  - Unit tests for password hashing, JWT generation, and role checks.
-  - Integration tests for auth endpoints.
+  - `POST /api/v1/auth/login` (returns JWT + rotating refresh token + user profile).
+  - `POST /api/v1/auth/refresh` (rotates refresh token and issues new JWT pair).
+  - `POST /api/v1/auth/logout` (revokes active refresh token in database).
+  - `GET /api/v1/auth/me` (active session profile verification).
+  - `GET /api/v1/auth/role-test/{role}` (RBAC verification probes for student, teacher, annotator, admin).
+  - `PUT /api/v1/auth/users/{user_id}/role` (admin-only user role management).
+- [x] **Frontend Auth UI:**
+  - Modern sign-in page (`/login`) with form validation and demo test accounts.
+  - Registration page (`/register`) with role cards, password complexity checks, and privilege boundaries.
+  - Authenticated dashboard (`/dashboard`) displaying user profile, active RBAC permissions, and interactive live backend RBAC probes.
+  - Dynamic auth-aware navigation header (`Navbar.tsx`) with login/register links or user avatar, role badge, and logout trigger.
+- [x] **Verification:**
+  - Unit tests for Argon2 password hashing, JWT generation/expiry/tamper resistance, and token hashing (6 tests passing).
+  - Integration tests for auth endpoints, registration, duplicate checks, login, refresh rotation, revocation, RBAC matrix, and admin role updates (8 tests passing).
+  - Total 25 backend tests passing against live PostgreSQL 16 container.
+  - Zero Ruff linting errors (`All checks passed!`).
+  - Next.js 15 production build and typecheck with Node 22 LTS passing (`0 errors`).
 
 ---
 

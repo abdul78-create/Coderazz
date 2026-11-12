@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import {
   Code2,
   Cpu,
@@ -8,6 +9,7 @@ import {
   Zap,
   Layers,
   ArrowRight,
+  UserCheck,
 } from "lucide-react";
 import { StatusCard } from "@/components/StatusCard";
 
@@ -15,7 +17,7 @@ export default function HomePage() {
   return (
     <div className="space-y-10">
       {/* Hero Section */}
-      <div className="relative py-8 md:py-12 text-center max-w-4xl mx-auto space-y-4">
+      <div className="relative py-8 md:py-12 text-center max-w-4xl mx-auto space-y-5">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold uppercase tracking-wider">
           <Zap className="h-3.5 w-3.5" />
           <span>FOSS Educational AI Infrastructure</span>
@@ -31,6 +33,24 @@ export default function HomePage() {
           CodeRazz detects the mental model misconception behind introductory programming mistakes,
           delivers 5 levels of progressive hints, and empowers teachers with diagnostic class heatmaps.
         </p>
+
+        {/* CTA Buttons */}
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Link
+            href="/login"
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2"
+          >
+            <span>Sign In to Platform</span>
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          <Link
+            href="/register"
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-300 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:text-white transition-all flex items-center gap-2"
+          >
+            <UserCheck className="h-4 w-4 text-slate-400" />
+            <span>Create Account</span>
+          </Link>
+        </div>
       </div>
 
       {/* Real-time Status Verification Card */}
@@ -108,12 +128,12 @@ export default function HomePage() {
           </div>
           <div>
             <h4 className="text-sm font-semibold text-white">
-              Phase 1 Security & Isolation Architecture Active
+              Phase 2 Authentication, RBAC & Database Models Active
             </h4>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
-              Student code is treated as strictly untrusted. In Phase 1, the core backend APIs,
-              PostgreSQL/SQLite database layer, and Next.js frontend are validated. Container sandboxing
-              with non-root execution and severed network will be integrated in Phase 3.
+              Argon2id password hashing, JWT bearer tokens, rotating refresh tokens with SHA-256 revocation,
+              and 4-tier RBAC (Student, Teacher, Annotator, Admin) are enforced on PostgreSQL 16. Container
+              sandboxing and misconception diagnosis will be introduced in subsequent phases.
             </p>
           </div>
         </div>
