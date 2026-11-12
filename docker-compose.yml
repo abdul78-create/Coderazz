@@ -1,0 +1,26 @@
+services:
+  # ============================================================================
+  # PostgreSQL Database Service
+  # Free, local, open-source relational database
+  # ============================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: coderazz_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-coderazz_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coderazz_local_password}
+      POSTGRES_DB: ${POSTGRES_DB:-coderazz_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-coderazz_user} -d ${POSTGRES_DB:-coderazz_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    name: coderazz_postgres_data
