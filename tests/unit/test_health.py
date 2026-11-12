@@ -23,14 +23,17 @@ async def test_root_index():
 
 @pytest.mark.asyncio
 async def test_health_check_endpoint():
-    """Verify health check endpoint returns status and database report."""
+    """Verify health check endpoint returns status and database report with PostgreSQL."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/health")
         assert response.status_code == 200
         data = response.json()
         assert data["app"] == "CodeRazz"
-        assert data["status"] in ["healthy", "degraded"]
-        assert "database" in data
-        assert "status" in data["database"]
-        assert "dialect" in data["database"]
+        assert data["status"] == "healthy"
+        assert data["database"]["status"] == "connected"
+        assert data["database"]["mode"] == "postgresql"
+        assert data["database"]["dialect"] == "postgresql"
+        assert data["database"]["driver"] == "asyncpg"
+        assert "PostgreSQL 16" in data["database"]["version"]
+        assert data["database"]["error"] is None

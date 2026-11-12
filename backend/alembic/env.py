@@ -1,9 +1,11 @@
+import asyncio
 from logging.config import fileConfig
 
 from backend.app.config import get_settings
 from backend.app.database import Base
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import pool
 from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
@@ -15,19 +17,9 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 settings = get_settings()
-
-# Use sync URL for Alembic migrations:
-# Replace async drivers (+psycopg, +aiosqlite) with sync equivalents (+pg8000, sqlite)
-raw_url = (
-    settings.DATABASE_URL
-    if not settings.FORCE_SQLITE_DEV
-    else settings.FALLBACK_SQLITE_URL
-)
-sync_url = (
-    raw_url.replace("+psycopg", "+pg8000")
-    .replace("+aiosqlite", "")
-)
-config.set_main_option("sqlalchemy.url", sync_url)
+# Dynamic DB URL from active application settings (postgresql+asyncpg or sqlite+aiosqlite)
+target_url = settings.get_effective_db_url()
+config.set_main_option("sqlalchemy.url", target_url)
 
 
 def run_migrations_offline() -> None:
@@ -50,18 +42,23 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode using sync engine."""
-    connectable = engine_from_config(
+async def run_async_migrations() -> None:
+    """Run migrations in 'online' mode using AsyncEngine (asyncpg for PostgreSQL)."""
+    connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        do_run_migrations(connection)
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
 
-    connectable.dispose()
+    await connectable.dispose()
+
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode."""
+    asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

@@ -1,7 +1,7 @@
 """Application configuration module using Pydantic Settings."""
 
 from functools import lru_cache
-from typing import List
+from typing import List, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,12 +28,17 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
-    # Database
+    # Database Configuration (Explicit Modes: 'postgresql' or 'sqlite')
+    DB_MODE: Literal["postgresql", "sqlite"] = "postgresql"
+    POSTGRES_USER: str = "coderazz_user"
+    POSTGRES_PASSWORD: str = "coderazz_local_password"
+    POSTGRES_DB: str = "coderazz_db"
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5433
     DATABASE_URL: str = (
-        "postgresql+psycopg://coderazz_user:coderazz_local_password@localhost:5432/coderazz_db"
+        "postgresql+asyncpg://coderazz_user:coderazz_local_password@localhost:5433/coderazz_db"
     )
-    FALLBACK_SQLITE_URL: str = "sqlite+aiosqlite:///./coderazz_dev.db"
-    FORCE_SQLITE_DEV: bool = False
+    SQLITE_URL: str = "sqlite+aiosqlite:///./coderazz_dev.db"
 
     # Execution Sandbox
     SANDBOX_MODE: str = "docker"
@@ -54,6 +59,12 @@ class Settings(BaseSettings):
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
+
+    def get_effective_db_url(self) -> str:
+        """Return the active database URL based on explicit DB_MODE."""
+        if self.DB_MODE == "sqlite":
+            return self.SQLITE_URL
+        return self.DATABASE_URL
 
 
 @lru_cache()

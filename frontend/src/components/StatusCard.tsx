@@ -104,21 +104,23 @@ export function StatusCard() {
           <div className="mt-2 text-sm font-semibold text-white flex items-center gap-2">
             <Database className="h-4 w-4 text-indigo-400" />
             {health?.database.dialect ? (
-              <span className="capitalize">{health.database.dialect}</span>
+              <span className="capitalize">{health.database.dialect} ({health.database.driver})</span>
             ) : (
-              "PostgreSQL 16"
+              "PostgreSQL 16 (asyncpg)"
             )}
-            {health?.database.fallback_active && (
+            {health?.database.mode === "sqlite" && (
               <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                SQLite Dev Fallback
+                SQLite Mode
+              </span>
+            )}
+            {health?.database.mode === "postgresql" && (
+              <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                PostgreSQL Mode
               </span>
             )}
           </div>
-          <div className="mt-1 text-xs text-slate-500">
-            {health?.database.notice ||
-              (health?.database.target
-                ? `Target: ${health.database.target}`
-                : "PostgreSQL 16 via Docker")}
+          <div className="mt-1 text-xs text-slate-500 truncate">
+            {health?.database.version || "PostgreSQL 16 on port 5433"}
           </div>
         </div>
       </div>

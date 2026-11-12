@@ -66,12 +66,10 @@ def create_application() -> FastAPI:
     # Health check response model
     class DatabaseStatus(BaseModel):
         status: str
+        mode: str
         dialect: str
-        target: str
-        fallback_active: bool
-        postgres_container_verified: bool | None = None
-        postgres_version: str | None = None
-        notice: str | None = None
+        driver: str
+        version: str | None = None
         error: str | None = None
 
     class HealthResponse(BaseModel):

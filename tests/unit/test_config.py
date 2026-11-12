@@ -9,8 +9,9 @@ def test_settings_defaults():
     assert settings.APP_NAME == "CodeRazz"
     assert settings.APP_PORT == 8000
     assert settings.FRONTEND_PORT == 3000
-    assert "postgresql" in settings.DATABASE_URL
-    assert "sqlite" in settings.FALLBACK_SQLITE_URL
+    assert settings.DB_MODE == "postgresql"
+    assert "postgresql+asyncpg" in settings.DATABASE_URL
+    assert "sqlite+aiosqlite" in settings.SQLITE_URL
     assert settings.OLLAMA_ENABLED is False  # Zero cost, optional local LLM only
 
 
@@ -18,9 +19,10 @@ def test_settings_custom_instance():
     """Verify settings can be instantiated with custom values."""
     custom = Settings(
         APP_NAME="CodeRazz-Test",
-        FORCE_SQLITE_DEV=True,
+        DB_MODE="sqlite",
         SANDBOX_TIMEOUT_SECONDS=5.0,
     )
     assert custom.APP_NAME == "CodeRazz-Test"
-    assert custom.FORCE_SQLITE_DEV is True
+    assert custom.DB_MODE == "sqlite"
     assert custom.SANDBOX_TIMEOUT_SECONDS == 5.0
+    assert "sqlite" in custom.get_effective_db_url()

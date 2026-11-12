@@ -1,7 +1,7 @@
 """Database connection management and session factory."""
 
 import logging
-from typing import AsyncGenerator, Tuple
+from typing import AsyncGenerator
 
 from backend.app.config import get_settings
 from sqlalchemy import text
@@ -23,72 +23,61 @@ class Base(DeclarativeBase):
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
-_active_dialect: str = "unknown"
 
 
-def create_engine_and_factory() -> Tuple[AsyncEngine, async_sessionmaker[AsyncSession], str]:
-    """Create async engine with automatic SQLite fallback if PostgreSQL is offline."""
-    global _engine, _session_factory, _active_dialect
+def create_engine_and_factory() -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+    """Create async engine and session factory according to explicit DB_MODE configuration.
+
+    No silent fallback:
+    - If DB_MODE is 'postgresql', strictly initialize with asyncpg.
+    - If DB_MODE is 'sqlite', strictly initialize with aiosqlite.
+    """
     settings = get_settings()
+    db_url = settings.get_effective_db_url()
 
-    if settings.FORCE_SQLITE_DEV:
-        logger.info("Explicit FORCE_SQLITE_DEV flag set. Using SQLite database.")
-        db_url = settings.FALLBACK_SQLITE_URL
-    else:
-        db_url = settings.DATABASE_URL
+    logger.info("Initializing async database engine in '%s' mode: %s", settings.DB_MODE, db_url)
 
-    try:
-        connect_args = {}
-        if "sqlite" in db_url:
-            connect_args["check_same_thread"] = False
+    connect_args = {}
+    if settings.DB_MODE == "sqlite":
+        connect_args["check_same_thread"] = False
 
-        engine = create_async_engine(
-            db_url,
-            echo=settings.DEBUG and settings.ENV == "development",
-            future=True,
-            connect_args=connect_args,
-        )
-        dialect_name = "postgresql" if "postgresql" in db_url else "sqlite"
-        session_factory = async_sessionmaker(
-            bind=engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-            autoflush=False,
-        )
-        return engine, session_factory, dialect_name
-    except Exception as exc:
-        logger.warning(
-            "Primary database connection setup failed (%s). Falling back to SQLite development DB.",
-            exc,
-        )
-        fallback_engine = create_async_engine(
-            settings.FALLBACK_SQLITE_URL,
-            echo=False,
-            connect_args={"check_same_thread": False},
-        )
-        fallback_factory = async_sessionmaker(
-            bind=fallback_engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-            autoflush=False,
-        )
-        return fallback_engine, fallback_factory, "sqlite"
+    engine = create_async_engine(
+        db_url,
+        echo=settings.DEBUG and settings.ENV == "development",
+        future=True,
+        connect_args=connect_args,
+    )
+
+    session_factory = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )
+    return engine, session_factory
 
 
 def get_engine() -> AsyncEngine:
     """Retrieve or initialize the active AsyncEngine."""
-    global _engine, _session_factory, _active_dialect
+    global _engine, _session_factory
     if _engine is None:
-        _engine, _session_factory, _active_dialect = create_engine_and_factory()
+        _engine, _session_factory = create_engine_and_factory()
     return _engine
 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
     """Retrieve or initialize the active async session factory."""
-    global _engine, _session_factory, _active_dialect
+    global _engine, _session_factory
     if _session_factory is None:
-        _engine, _session_factory, _active_dialect = create_engine_and_factory()
+        _engine, _session_factory = create_engine_and_factory()
     return _session_factory
+
+
+def reset_engine() -> None:
+    """Reset the engine singleton (used in tests or dynamic re-configuration)."""
+    global _engine, _session_factory
+    _engine = None
+    _session_factory = None
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -105,106 +94,44 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-def probe_postgres_directly() -> dict:
-    """Probe PostgreSQL 16 container directly using pure-Python pg8000 driver."""
-    try:
-        import pg8000.native
-        con = pg8000.native.Connection(
-            user="coderazz_user",
-            host="localhost",
-            port=5433,
-            database="coderazz_db",
-            password="coderazz_local_password",
-            timeout=3,
-        )
-        res = con.run("SELECT version()")[0][0]
-        con.close()
-        return {
-            "reachable": True,
-            "version": res,
-            "port": 5433,
-        }
-    except Exception as e:
-        return {
-            "reachable": False,
-            "error": str(e),
-            "port": 5433,
-        }
-
-
 async def check_db_health() -> dict:
-    """Verify database connectivity and return comprehensive health report."""
-    global _active_dialect, _engine, _session_factory
-    engine = get_engine()
+    """Verify active async database connectivity and return health report."""
     settings = get_settings()
-
-    # Probe actual PostgreSQL container
-    pg_probe = probe_postgres_directly()
+    engine = get_engine()
 
     try:
         async with engine.connect() as conn:
-            result = await conn.execute(text("SELECT 1"))
-            val = result.scalar()
+            # Execute probe query
+            res = await conn.execute(text("SELECT 1"))
+            val = res.scalar()
+
+            # Retrieve database engine version string
+            if engine.dialect.name == "postgresql":
+                ver_res = await conn.execute(text("SELECT version()"))
+                db_version = ver_res.scalar()
+            else:
+                ver_res = await conn.execute(text("SELECT sqlite_version()"))
+                db_version = f"SQLite {ver_res.scalar()}"
+
             return {
                 "status": "connected" if val == 1 else "unhealthy",
-                "dialect": _active_dialect,
-                "target": "postgresql" if not settings.FORCE_SQLITE_DEV else "sqlite",
-                "fallback_active": _active_dialect == "sqlite",
-                "postgres_container_verified": pg_probe["reachable"],
-                "postgres_version": pg_probe.get("version"),
-                "notice": (
-                    "PostgreSQL 16 is verified healthy on port 5433. Async session uses SQLite "
-                    "on Windows host due to AppLocker DLL policy blocking psycopg pq.dll."
-                    if _active_dialect == "sqlite" and pg_probe["reachable"]
-                    else None
-                ),
+                "mode": settings.DB_MODE,
+                "dialect": engine.dialect.name,
+                "driver": engine.dialect.driver,
+                "version": db_version,
+                "error": None,
             }
     except Exception as err:
-        if _active_dialect != "sqlite":
-            logger.warning(
-                "PostgreSQL health check failed (%s). Activating SQLite local-dev fallback.",
-                err,
-            )
-            _engine = create_async_engine(
-                settings.FALLBACK_SQLITE_URL,
-                echo=False,
-                connect_args={"check_same_thread": False},
-            )
-            _session_factory = async_sessionmaker(
-                bind=_engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
-                autoflush=False,
-            )
-            _active_dialect = "sqlite"
-
-            try:
-                async with _engine.connect() as conn:
-                    result = await conn.execute(text("SELECT 1"))
-                    val = result.scalar()
-                    return {
-                        "status": "connected" if val == 1 else "unhealthy",
-                        "dialect": "sqlite",
-                        "target": "postgresql",
-                        "fallback_active": True,
-                        "postgres_container_verified": pg_probe["reachable"],
-                        "postgres_version": pg_probe.get("version"),
-                        "notice": (
-                            "PostgreSQL 16 is verified healthy on port 5433. Async session uses "
-                            "SQLite on Windows host due to AppLocker DLL policy."
-                        ),
-                    }
-            except Exception as fallback_err:
-                return {
-                    "status": "disconnected",
-                    "error": str(fallback_err),
-                    "dialect": "none",
-                    "postgres_container_verified": pg_probe["reachable"],
-                }
-
+        logger.error(
+            "Database connectivity check failed in '%s' mode: %s",
+            settings.DB_MODE,
+            err,
+        )
         return {
             "status": "disconnected",
+            "mode": settings.DB_MODE,
+            "dialect": engine.dialect.name,
+            "driver": engine.dialect.driver,
+            "version": None,
             "error": str(err),
-            "dialect": _active_dialect,
-            "postgres_container_verified": pg_probe["reachable"],
         }
