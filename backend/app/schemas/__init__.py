@@ -9,6 +9,21 @@ from backend.app.schemas.auth import (
     TokenResponse,
     UserProfileResponse,
 )
+from backend.app.schemas.problem import (
+    ProblemCreateRequest,
+    ProblemDetailResponse,
+    ProblemListItemResponse,
+    TestCaseAdminResponse,
+    TestCaseCreateRequest,
+    TestCasePublicResponse,
+)
+from backend.app.schemas.submission import (
+    CodeRunRequest,
+    CodeRunResponse,
+    SubmissionCreateRequest,
+    SubmissionListItemResponse,
+    SubmissionResponse,
+)
 
 __all__ = [
     "RegisterRequest",
@@ -18,5 +33,16 @@ __all__ = [
     "UserProfileResponse",
     "RoleUpdateRequest",
     "MessageResponse",
+    "ProblemListItemResponse",
+    "ProblemDetailResponse",
+    "ProblemCreateRequest",
+    "TestCasePublicResponse",
+    "TestCaseAdminResponse",
+    "TestCaseCreateRequest",
+    "CodeRunRequest",
+    "CodeRunResponse",
+    "SubmissionCreateRequest",
+    "SubmissionResponse",
+    "SubmissionListItemResponse",
 ]
 

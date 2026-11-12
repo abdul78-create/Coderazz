@@ -3,7 +3,7 @@
  * Zero-cost, resilient HTTP client wrapper for backend API communication.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
 export type UserRole = "STUDENT" | "TEACHER" | "ANNOTATOR" | "ADMIN";
 
@@ -22,7 +22,7 @@ export interface TokenResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
-  expires_in: number;
+  expires_in_seconds?: number;
   user: UserProfile;
 }
 
@@ -36,6 +36,113 @@ export interface RegisterPayload {
 export interface LoginPayload {
   email: string;
   password: string;
+}
+
+export type ProblemDifficulty = "EASY" | "MEDIUM" | "HARD";
+
+export interface TestCasePublic {
+  id: string;
+  order_index: number;
+  input_data: string;
+  expected_output: string;
+  explanation?: string;
+}
+
+export interface ProblemListItem {
+  id: string;
+  slug: string;
+  title: string;
+  difficulty: ProblemDifficulty;
+  category: string;
+  order_index: number;
+  is_published: boolean;
+  sample_cases_count: number;
+  total_cases_count: number;
+}
+
+export interface ProblemDetail {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  difficulty: ProblemDifficulty;
+  category: string;
+  starter_code: string;
+  time_limit_ms: number;
+  memory_limit_mb: number;
+  order_index: number;
+  sample_test_cases: TestCasePublic[];
+}
+
+export type SubmissionVerdict =
+  | "ACCEPTED"
+  | "WRONG_ANSWER"
+  | "RUNTIME_ERROR"
+  | "TIME_LIMIT_EXCEEDED"
+  | "MEMORY_LIMIT_EXCEEDED"
+  | "OUTPUT_LIMIT_EXCEEDED"
+  | "COMPILATION_ERROR"
+  | "SANDBOX_ERROR"
+  | "PENDING";
+
+export interface TestCaseResult {
+  test_case_id?: string;
+  order_index: number;
+  is_hidden: boolean;
+  passed: boolean;
+  verdict: SubmissionVerdict;
+  runtime_ms: number;
+  memory_kb: number;
+  input_data?: string;
+  expected_output?: string;
+  actual_output?: string;
+  stderr?: string;
+  explanation?: string;
+}
+
+export interface CodeRunResult {
+  verdict: SubmissionVerdict;
+  stdout: string;
+  stderr: string;
+  runtime_ms: number;
+  memory_kb: number;
+  test_cases_passed: number;
+  total_test_cases: number;
+  error_message?: string;
+  test_cases: TestCaseResult[];
+}
+
+export interface SubmissionRecord {
+  id: string;
+  problem_id: string;
+  user_id: string;
+  code: string;
+  language: string;
+  status: string;
+  verdict: SubmissionVerdict;
+  runtime_ms?: number;
+  memory_kb?: number;
+  test_cases_passed: number;
+  total_test_cases: number;
+  stdout?: string;
+  stderr?: string;
+  error_message?: string;
+  created_at: string;
+  problem_title?: string;
+  problem_slug?: string;
+}
+
+export interface SubmissionListItem {
+  id: string;
+  problem_id: string;
+  problem_title: string;
+  problem_slug: string;
+  verdict: SubmissionVerdict;
+  status: string;
+  runtime_ms?: number;
+  test_cases_passed: number;
+  total_test_cases: number;
+  created_at: string;
 }
 
 export interface DatabaseStatus {
@@ -89,7 +196,7 @@ async function fetchFromApi<T>(
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      ...(options?.headers as Record<string, string> || {}),
+      ...((options?.headers as Record<string, string>) || {}),
     };
 
     if (token) {
@@ -170,7 +277,10 @@ export const api = {
   /**
    * Invalidate active session and revoke refresh token.
    */
-  async logout(refreshToken?: string | null, accessToken?: string | null): Promise<MessageResponse> {
+  async logout(
+    refreshToken?: string | null,
+    accessToken?: string | null
+  ): Promise<MessageResponse> {
     return fetchFromApi<MessageResponse>(
       "/api/v1/auth/logout",
       {
@@ -199,6 +309,93 @@ export const api = {
       `/api/v1/auth/role-test/${role}`,
       {},
       accessToken
+    );
+  },
+
+  /**
+   * Retrieve list of programming problems.
+   */
+  async getProblems(params?: {
+    difficulty?: string;
+    category?: string;
+  }): Promise<ProblemListItem[]> {
+    let query = "";
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.difficulty) q.append("difficulty", params.difficulty);
+      if (params.category) q.append("category", params.category);
+      if (q.toString()) query = `?${q.toString()}`;
+    }
+    return fetchFromApi<ProblemListItem[]>(`/api/v1/problems${query}`);
+  },
+
+  /**
+   * Retrieve details and visible sample test cases for a problem.
+   */
+  async getProblem(idOrSlug: string): Promise<ProblemDetail> {
+    return fetchFromApi<ProblemDetail>(`/api/v1/problems/${idOrSlug}`);
+  },
+
+  /**
+   * Run code interactively against sample test cases in the sandbox.
+   */
+  async runCode(
+    payload: { code: string; problem_id?: string; custom_input?: string },
+    token: string
+  ): Promise<CodeRunResult> {
+    return fetchFromApi<CodeRunResult>(
+      "/api/v1/submissions/run",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      token
+    );
+  },
+
+  /**
+   * Submit code for final grading against all hidden test cases.
+   */
+  async submitCode(
+    payload: { problem_id: string; code: string; language?: string },
+    token: string
+  ): Promise<SubmissionRecord> {
+    return fetchFromApi<SubmissionRecord>(
+      "/api/v1/submissions",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      token
+    );
+  },
+
+  /**
+   * Retrieve submission history for the authenticated user.
+   */
+  async getSubmissions(
+    token: string,
+    problemId?: string
+  ): Promise<SubmissionListItem[]> {
+    const q = problemId ? `?problem_id=${problemId}` : "";
+    return fetchFromApi<SubmissionListItem[]>(
+      `/api/v1/submissions${q}`,
+      {},
+      token
+    );
+  },
+
+  /**
+   * Retrieve details for a single submission.
+   */
+  async getSubmission(
+    submissionId: string,
+    token: string
+  ): Promise<SubmissionRecord> {
+    return fetchFromApi<SubmissionRecord>(
+      `/api/v1/submissions/${submissionId}`,
+      {},
+      token
     );
   },
 };

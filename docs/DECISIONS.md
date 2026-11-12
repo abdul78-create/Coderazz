@@ -178,3 +178,40 @@ CodeRazz requires a secure, production-grade identity and access control foundat
 - **Pros:** Zero-cost, 100% self-hosted, OWASP-compliant, secure session lifecycle with instant revocation capability, and server-side RBAC protection.
 - **Cons:** Secret key management must be strictly handled through `.env` configurations; database lookups are required for refresh token rotation.
 
+---
+
+## ADR-009: Ephemeral Docker Execution Sandbox & Confidential Test Case Isolation
+
+### Context
+Phase 3 enables student code execution. Executing untrusted student code on the host machine invites catastrophic security vulnerabilities (fork bombs, system compromise, network port scanning, secret exfiltration). Furthermore, grading integrity requires that confidential test cases remain secret from students while providing immediate feedback on sample test cases.
+
+### Decision
+1. **Isolated Disposable Linux Runner Image:**
+   - Standardized on `coderazz-python-runner:latest` (built on Alpine Linux 3.12, 18.1 MB).
+   - Dedicated unprivileged user `coderazz` (`uid=10001:10001`).
+   - Every single run or test case evaluation executes in a newly launched, disposable container (`--rm`).
+2. **Container Security Hardening:**
+   - `--network none` (network severed, egress/ingress impossible).
+   - `--read-only` (immutable root filesystem, preventing file overwrites).
+   - `--tmpfs /tmp:rw,noexec,nosuid,size=16m` (strictly in-memory scratch space, no execution allowed).
+   - `--cap-drop=ALL` (strips all Linux capabilities including `CAP_NET_RAW`, `CAP_SYS_ADMIN`).
+   - `--security-opt=no-new-privileges` (prevents SUID privilege escalation).
+   - Hard CPU ceiling (`--cpus 1.0`), memory ceiling (`--memory 128m`), and process limit (`--pids-limit 32`).
+   - Dual timeout watchdog (3.0s wall-clock max) with asynchronous process termination and container force kill.
+   - Runaway stdout/stderr output truncation capped at 64 KB (`65536` bytes).
+3. **No Secret or Host Socket Mounts:**
+   - Execution containers are mounted with ONLY the student's isolated temporary Python script (`/app/solution.py:ro`).
+   - Under no circumstances shall application `.env` files, database credentials, or host Docker socket (`docker.sock`) be mounted.
+4. **Offline / Fallback Security Policy:**
+   - If the Docker daemon is offline or unavailable, execution requests return `503 Service Unavailable`.
+   - The system **never** silently falls back to running untrusted student code on the host machine.
+5. **Confidential Test Case Masking:**
+   - Public problem endpoints (`GET /api/v1/problems/{id_or_slug}`) strictly filter out test cases where `is_hidden=True`.
+   - Hidden test case inputs, expected outputs, and actual outputs are masked from student responses during grading to preserve evaluation integrity.
+   - Cross-student submission authorization ensures students can only inspect their own submission records (`403 Forbidden` on unauthorized peer access).
+
+### Consequences
+- **Pros:** Robust isolation against hostile scripts (infinite loops, memory bombs, network attempts, filesystem writes, fork bombs); grading integrity protected against test-case reverse-engineering.
+- **Cons:** Docker container startup incurs ~150-300ms overhead per test case evaluation run.
+
+

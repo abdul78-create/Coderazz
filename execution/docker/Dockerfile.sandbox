@@ -1,0 +1,22 @@
+# CodeRazz Execution Sandbox Dockerfile
+# Ultra-lightweight, hardened Python 3.12 Alpine runner
+FROM python:3.12-alpine
+
+# Create non-root unprivileged execution user (UID 10001, GID 10001)
+RUN addgroup -g 10001 -S coderazz && \
+    adduser -u 10001 -S coderazz -G coderazz
+
+WORKDIR /app
+
+# Copy execution harness
+COPY execution/harness.py /app/harness.py
+
+# Ensure harness is owned by coderazz and read/execute only
+RUN chown -R 10001:10001 /app && \
+    chmod -R 555 /app
+
+# Run as non-root user
+USER 10001:10001
+
+ENTRYPOINT ["python3", "/app/harness.py"]
+

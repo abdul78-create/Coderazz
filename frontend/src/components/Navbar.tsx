@@ -78,6 +78,14 @@ export function Navbar() {
             <span>Overview</span>
           </Link>
 
+          <Link
+            href="/problems"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-900 transition-colors"
+          >
+            <Terminal className="h-4 w-4 text-emerald-400" />
+            <span>Problem Library</span>
+          </Link>
+
           {user && (
             <Link
               href="/dashboard"
