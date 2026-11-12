@@ -267,14 +267,15 @@ class SandboxService:
         try:
             kill_proc = await asyncio.create_subprocess_exec(
                 "docker",
-                "kill",
+                "rm",
+                "-f",
                 container_name,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
             await kill_proc.communicate()
         except Exception as e:
-            logger.error("Failed to kill container %s: %s", container_name, e)
+            logger.error("Failed to force remove container %s: %s", container_name, e)
 
     def _determine_verdict(
         self, exit_code: int, stderr: str, runtime_ms: int, timeout_sec: float
