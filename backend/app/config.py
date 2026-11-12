@@ -55,12 +55,17 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "deepseek-coder:6.7b"
 
-    # CORS
+    # User & Teacher Registration Policies
+    ALLOW_PUBLIC_TEACHER_REGISTRATION: bool = True
+
+    # CORS Whitelist
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "http://localhost:8001",
+        "http://127.0.0.1:8001",
     ]
 
     def get_effective_db_url(self) -> str:
@@ -72,5 +77,15 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Return cached application settings singleton."""
-    return Settings()
+    """Return cached application settings singleton and validate production invariants."""
+    settings = Settings()
+    if (
+        settings.ENV == "production"
+        and settings.SECRET_KEY == "coderazz_dev_secret_key_change_in_production_32chars"
+    ):
+        raise ValueError(
+            "CRITICAL SECURITY VIOLATION: Cannot run in production with default "
+            "development SECRET_KEY. Set a cryptographically strong SECRET_KEY in your "
+            "production environment variables."
+        )
+    return settings

@@ -40,6 +40,13 @@ class RegisterRequest(BaseModel):
                 f"Privilege escalation prevented: Role '{v.value}' cannot be self-assigned. "
                 "Contact a platform administrator."
             )
+        from backend.app.config import get_settings
+
+        if v == UserRole.TEACHER and not get_settings().ALLOW_PUBLIC_TEACHER_REGISTRATION:
+            raise ValueError(
+                "Public teacher registration is disabled for this deployment. "
+                "Teacher accounts must be provisioned or approved by a platform administrator."
+            )
         return v
 
 

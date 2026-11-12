@@ -138,17 +138,42 @@ async def refresh_token(
     token_hash = hash_token(payload.refresh_token)
     now = datetime.now(timezone.utc)
 
-    query = select(RefreshToken).where(
-        RefreshToken.token_hash == token_hash,
-        RefreshToken.revoked.is_(False),
-    )
+    query = select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     result = await db.execute(query)
     token_record = result.scalar_one_or_none()
 
-    if not token_record or token_record.expires_at <= now:
+    if not token_record:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token is invalid, expired, or revoked.",
+            detail="Refresh token is invalid or does not exist.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # REUSE DETECTION: If an already-revoked refresh token is presented,
+    # trigger token family invalidation
+    if token_record.revoked:
+        revoke_all = (
+            update(RefreshToken)
+            .where(RefreshToken.user_id == token_record.user_id)
+            .values(revoked=True)
+        )
+        await db.execute(revoke_all)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=(
+                "Refresh token reuse detected. "
+                "All active sessions have been invalidated for security."
+            ),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if token_record.expires_at <= now:
+        token_record.revoked = True
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -330,6 +355,14 @@ async def update_user_role(
         )
 
     target_user.role = payload.role
+
+    # Invalidate active refresh tokens so user is forced to re-authenticate with new role
+    revoke_tokens = (
+        update(RefreshToken)
+        .where(RefreshToken.user_id == target_user.id)
+        .values(revoked=True)
+    )
+    await db.execute(revoke_tokens)
     await db.commit()
     await db.refresh(target_user)
 

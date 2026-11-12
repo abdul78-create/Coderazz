@@ -346,3 +346,46 @@ async def test_admin_role_management():
         assert promote_res.status_code == 200
         assert promote_res.json()["role"] == "annotator"
 
+
+@pytest.mark.asyncio
+async def test_refresh_token_reuse_detection_invalidates_all_sessions():
+    """Verify RFC 6749 Section 4.14.2: Token reuse invalidates entire token family."""
+    transport = ASGITransport(app=app)
+    email = f"reuse_{uuid.uuid4().hex[:8]}@coderazz.edu"
+    password = "ReusePassword#123"
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": password, "full_name": "Reuse Victim", "role": "student"},
+        )
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+        token_1 = login.json()["refresh_token"]
+
+        # Legitimate rotation: exchange token_1 for token_2
+        refresh_res = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": token_1},
+        )
+        assert refresh_res.status_code == 200
+        token_2 = refresh_res.json()["refresh_token"]
+
+        # MALICIOUS REUSE: An attacker presents already-consumed token_1
+        reuse_res = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": token_1},
+        )
+        assert reuse_res.status_code == 401
+        assert "reuse detected" in reuse_res.json()["detail"].lower()
+
+        # Legitimate token_2 MUST now be invalidated as part of compromised token family
+        compromised_res = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": token_2},
+        )
+        assert compromised_res.status_code == 401
+
+
