@@ -219,18 +219,51 @@ flowchart TD
 ---
 
 ### Phase 6: Teacher Analytics & Human Annotation Queue
-- [ ] **Class Management:**
-  - Teacher class creation, roster management, and join code generation.
-  - Student class enrollment via join code.
-- [ ] **Class-Wide Misconception Analytics:**
-  - Aggregate statistics calculating misconception prevalence across students and assignments.
-  - Problem-by-misconception interactive heatmap using Recharts.
-  - Longitudinal trend charts showing misconception decay/persistence over time.
-- [ ] **Individual Student Diagnostic Profile:**
-  - Visual timeline of student misconceptions, mastery badges, and persistent struggle areas.
-- [ ] **Human-in-the-Loop Annotation Queue:**
-  - Review dashboard for annotators and teachers to inspect submissions flagged as low-confidence or `S2`.
-  - Override interface to correct automated diagnoses, retraining data export in CSV/JSON format.
+- [x] **Class Roster & Enrollment Management (`backend/app/models/roster.py`, `backend/app/api/v1/classes.py`):**
+  - SQLAlchemy models `ClassGroup` and `ClassEnrollment` with cascading relationships to `User`.
+  - Unambiguous 6-character uppercase alphanumeric join code generator excluding confusing glyphs (`0/O`, `1/I/L`).
+  - Alembic migration `050873629007_create_class_groups_and_class_.py` applied to live PostgreSQL 16.
+  - Endpoints: `POST /api/v1/classes`, `GET /api/v1/classes`, `POST /api/v1/classes/join`, `GET /api/v1/classes/{id}`, `GET /api/v1/classes/{id}/roster`.
+  - Enforced strict RBAC: teachers only see their own classes; students cannot inspect foreign rosters or un-enrolled cohorts.
+- [x] **Class-Wide Misconception Analytics Endpoints (`backend/app/api/v1/analytics.py`):**
+  - `GET /api/v1/classes/{class_id}/analytics/misconceptions`:
+    - Aggregates frequency, unique student count, and class percentage for each 30-class taxonomy code.
+    - Joins across class enrollments, submissions, and diagnoses with optional problem filtering.
+  - `GET /api/v1/classes/{class_id}/analytics/struggle-trends`:
+    - Longitudinal multi-line time series (configurable 7 to 90 days, default 14).
+    - Aggregates daily total submissions, failing submissions, hint requests, and active unique learners.
+    - Database engine-agnostic date grouping (`func.date(Submission.created_at)`) compatible with both PostgreSQL 16 and SQLite fallback.
+- [x] **Human-in-the-Loop Annotation Queue (`backend/app/models/annotation.py`, `backend/app/api/v1/annotations.py`):**
+  - SQLAlchemy model `AnnotationTask` with lifecycle status (`PENDING`, `IN_REVIEW`, `RESOLVED`, `DISMISSED`).
+  - Alembic migration `666e84b718aa_create_annotation_tasks_table.py` applied to live PostgreSQL 16.
+  - Automated task spawning in `backend/app/api/v1/submissions.py` whenever diagnostic confidence is low (`< 0.50`) or triggers novel meta-class (`S2`).
+  - Endpoints:
+    - `GET /api/v1/annotations/queue`: Lists pending tasks with student name, problem title, submitted code, and trigger reason.
+    - `GET /api/v1/annotations/{id}`: Detailed task inspection.
+    - `POST /api/v1/annotations/{id}/resolve`: Authoritative human ground-truth override updating `Diagnosis` to `confidence_score = 1.0` and `detector_type = DetectorType.HUMAN_OVERRIDE`.
+    - `POST /api/v1/annotations/{id}/dismiss`: Dismisses low-confidence tasks without altering existing diagnoses.
+- [x] **Frontend Teacher Analytics Dashboard (`frontend/src/app/teacher/dashboard/page.tsx`):**
+  - Built with Next.js 15 App Router, React 19, Tailwind CSS, and Recharts.
+  - Protected with role-based guard (accessible only to `TEACHER` and `ADMIN` roles).
+  - Class Switcher dropdown and "+ New Class" modal with live join code generation.
+  - Active Class KPI cards: Enrollment Join Code with 1-click clipboard copy, Enrolled Students count, Analyzed Submissions, and Pending Human Review count.
+  - **Tab 1: Misconception & Struggle Analytics:**
+    - Responsive Bar Chart (`Recharts`) visualizing misconception prevalence distribution across the 30-class taxonomy.
+    - Multi-line Struggle Trajectory Chart (`Recharts`) plotting daily attempts, failures, hints requested, and active learners.
+    - Diagnostic Insights breakdown table with taxonomy codes, descriptions, severity badges, and cohort percentages.
+  - **Tab 2: Enrolled Student Roster:**
+    - Live student list with enrollment timestamps, email identifiers, and active learning status.
+  - **Tab 3: Human Annotation Review Queue:**
+    - Live inspection of low-confidence and novel `S2` submissions.
+    - Syntax-styled student code snippet viewer.
+    - Dropdown taxonomy selector for 15 primary Python misconceptions.
+    - Form to add pedagogical notes and commit 1.0 ground-truth overrides or dismiss tasks.
+  - Integrated Teacher Analytics link in top navigation header (`Navbar.tsx`).
+- [x] **Verification & Test Coverage:**
+  - 61 unit tests passing.
+  - Integration tests for Class Rosters (`test_classes_api.py`), Analytics (`test_analytics_api.py`), and Human Annotations (`test_annotations_api.py`).
+  - 0 Ruff linting errors across codebase.
+  - Next.js 15 production build and TypeScript check (`tsc --noEmit`) passing with 0 errors.
 
 ---
 

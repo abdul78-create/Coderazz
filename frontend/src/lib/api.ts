@@ -217,6 +217,93 @@ export interface MessageResponse {
   message: string;
 }
 
+export interface ClassGroup {
+  id: string;
+  name: string;
+  description?: string;
+  join_code: string;
+  teacher_id: string;
+  teacher_name?: string;
+  is_active: boolean;
+  enrolled_students_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClassRosterMember {
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  enrolled_at: string;
+}
+
+export interface ClassRosterResponse {
+  class_id: string;
+  class_name: string;
+  join_code: string;
+  total_enrolled: number;
+  students: ClassRosterMember[];
+}
+
+export interface MisconceptionFrequencyItem {
+  misconception_code: string;
+  category: string;
+  name: string;
+  description: string;
+  severity: string;
+  count: number;
+  unique_students: number;
+  percentage: number;
+}
+
+export interface ClassMisconceptionAnalyticsResponse {
+  class_id: string;
+  total_submissions_analyzed: number;
+  total_struggling_students: number;
+  misconceptions: MisconceptionFrequencyItem[];
+}
+
+export interface DailyStrugglePoint {
+  date: string;
+  total_submissions: number;
+  failing_submissions: number;
+  hints_requested: number;
+  active_students: number;
+}
+
+export interface ClassStruggleTrendsResponse {
+  class_id: string;
+  start_date: string;
+  end_date: string;
+  trends: DailyStrugglePoint[];
+}
+
+export interface AnnotationTask {
+  id: string;
+  submission_id: string;
+  diagnosis_id?: string;
+  status: "PENDING" | "IN_REVIEW" | "RESOLVED" | "DISMISSED";
+  assigned_annotator_id?: string;
+  original_misconception_code: string;
+  original_confidence: number;
+  trigger_reason: string;
+  resolved_misconception_code?: string;
+  annotator_notes?: string;
+  resolved_at?: string;
+  created_at: string;
+  updated_at: string;
+  student_id?: string;
+  student_name?: string;
+  problem_id?: string;
+  problem_title?: string;
+  submission_code?: string;
+}
+
+export interface AnnotationQueueResponse {
+  total_pending: number;
+  tasks: AnnotationTask[];
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -475,4 +562,107 @@ export const api = {
       token
     );
   },
+
+  /**
+   * Class Roster and Teacher Analytics API Endpoints
+   */
+  async getTeacherClasses(token: string): Promise<ClassGroup[]> {
+    return fetchFromApi<ClassGroup[]>("/api/v1/classes", {}, token);
+  },
+
+  async createClass(
+    payload: { name: string; description?: string },
+    token: string
+  ): Promise<ClassGroup> {
+    return fetchFromApi<ClassGroup>(
+      "/api/v1/classes",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      token
+    );
+  },
+
+  async getClassRoster(
+    classId: string,
+    token: string
+  ): Promise<ClassRosterResponse> {
+    return fetchFromApi<ClassRosterResponse>(
+      `/api/v1/classes/${classId}/roster`,
+      {},
+      token
+    );
+  },
+
+  async getClassMisconceptions(
+    classId: string,
+    token: string,
+    problemId?: string
+  ): Promise<ClassMisconceptionAnalyticsResponse> {
+    const q = problemId ? `?problem_id=${problemId}` : "";
+    return fetchFromApi<ClassMisconceptionAnalyticsResponse>(
+      `/api/v1/classes/${classId}/analytics/misconceptions${q}`,
+      {},
+      token
+    );
+  },
+
+  async getClassStruggleTrends(
+    classId: string,
+    token: string,
+    days?: number
+  ): Promise<ClassStruggleTrendsResponse> {
+    const q = days ? `?days=${days}` : "";
+    return fetchFromApi<ClassStruggleTrendsResponse>(
+      `/api/v1/classes/${classId}/analytics/struggle-trends${q}`,
+      {},
+      token
+    );
+  },
+
+  async getAnnotationQueue(
+    token: string,
+    statusFilter: string = "PENDING",
+    limit: number = 50
+  ): Promise<AnnotationQueueResponse> {
+    const q = `?status_filter=${statusFilter}&limit=${limit}`;
+    return fetchFromApi<AnnotationQueueResponse>(
+      `/api/v1/annotations/queue${q}`,
+      {},
+      token
+    );
+  },
+
+  async resolveAnnotationTask(
+    taskId: string,
+    payload: { resolved_misconception_code: string; annotator_notes?: string },
+    token: string
+  ): Promise<AnnotationTask> {
+    return fetchFromApi<AnnotationTask>(
+      `/api/v1/annotations/${taskId}/resolve`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      token
+    );
+  },
+
+  async dismissAnnotationTask(
+    taskId: string,
+    token: string,
+    notes?: string
+  ): Promise<AnnotationTask> {
+    const q = notes ? `?notes=${encodeURIComponent(notes)}` : "";
+    return fetchFromApi<AnnotationTask>(
+      `/api/v1/annotations/${taskId}/dismiss${q}`,
+      {
+        method: "POST",
+      },
+      token
+    );
+  },
 };
+
+export const apiClient = api;

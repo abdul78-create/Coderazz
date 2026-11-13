@@ -12,6 +12,7 @@ import {
   UserPlus,
   LogOut,
   User,
+  BarChart3,
 } from "lucide-react";
 import { authStorage } from "@/lib/auth";
 import { UserProfile } from "@/lib/api";
@@ -93,6 +94,16 @@ export function Navbar() {
             >
               <LayoutDashboard className="h-4 w-4 text-indigo-400" />
               <span>Dashboard</span>
+            </Link>
+          )}
+
+          {user && (user.role === "TEACHER" || user.role === "ADMIN") && (
+            <Link
+              href="/teacher/dashboard"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-amber-300 hover:text-white hover:bg-amber-500/10 transition-colors border border-amber-500/20"
+            >
+              <BarChart3 className="h-4 w-4 text-amber-400" />
+              <span>Teacher Analytics</span>
             </Link>
           )}
         </nav>
