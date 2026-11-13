@@ -217,12 +217,18 @@ async def seed_demo_data():
                 await session.commit()
                 print(f"  ↳ Enrolled {s_info['name']} in {class_group.name}")
 
-        # 4. Fetch Problems
+        # 4. Fetch Problems (Auto-seed taxonomy and problems if not present)
         problems_res = await session.execute(select(Problem).order_by(Problem.order_index))
         problems = {p.slug: p for p in problems_res.scalars().all()}
         if not problems:
-            print("⚠ Warning: No problems found in database. Run `python scripts/seed_problems.py` first.")
-            return
+            print("• Problems not found. Auto-seeding taxonomy and problems...")
+            from backend.app.services.taxonomy_seed import seed_taxonomy
+            from scripts.seed_problems import seed_problems
+
+            await seed_taxonomy(session)
+            await seed_problems()
+            problems_res = await session.execute(select(Problem).order_by(Problem.order_index))
+            problems = {p.slug: p for p in problems_res.scalars().all()}
 
         two_sum = problems.get("two-sum")
         count_vowels = problems.get("count-vowels")

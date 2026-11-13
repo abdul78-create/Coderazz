@@ -23,7 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd -g 10001 coderazz && \
     useradd -u 10001 -g coderazz -s /bin/bash -m coderazz && \
     (groupadd -g 999 docker || true) && \
-    usermod -aG docker coderazz || true
+    usermod -aG docker coderazz || true && \
+    usermod -aG root coderazz || true
 
 # Copy and install python dependencies
 COPY backend/requirements.txt /app/requirements.txt
@@ -33,6 +34,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY backend /app/backend
 COPY ml /app/ml
 COPY execution /app/execution
+COPY scripts /app/scripts
+COPY backend/alembic.ini /app/alembic.ini
 
 # Ensure non-root ownership
 RUN chown -R coderazz:coderazz /app

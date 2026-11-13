@@ -41,14 +41,16 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: production
-      DEBUG: "false"
+      DEBUG: "true"
       PORT: 8000
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-coderazz_prod_user}:${POSTGRES_PASSWORD:-coderazz_prod_secure_password_2026}@postgres:5432/${POSTGRES_DB:-coderazz_prod_db}
       DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-coderazz_prod_user}:${POSTGRES_PASSWORD:-coderazz_prod_secure_password_2026}@postgres:5432/${POSTGRES_DB:-coderazz_prod_db}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-prod_jwt_super_secure_signing_key_minimum_32_bytes_2026}
       CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:8000"]'
       DOCKER_HOST: unix:///var/run/docker.sock
-      EXECUTION_IMAGE: coderazz-runner:latest
+      EXECUTION_IMAGE: coderazz-python-runner:latest
+    group_add:
+      - "0"
     volumes:
       # Mount host Docker daemon socket for spawning isolated, disposable runner containers
       - /var/run/docker.sock:/var/run/docker.sock
