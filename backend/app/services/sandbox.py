@@ -11,6 +11,7 @@ import logging
 import os
 import shutil
 import tempfile
+import time
 import uuid
 from typing import List, Optional
 
@@ -78,21 +79,58 @@ class SandboxService:
 
     def __init__(self):
         self.settings = get_settings()
+        self._docker_available_cache: Optional[bool] = None
+        self._docker_cache_timestamp: float = 0.0
 
-    async def is_docker_available(self) -> bool:
-        """Check whether the local Docker daemon is running and responsive."""
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "docker",
-                "info",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3.0)
-            return proc.returncode == 0
-        except Exception as exc:
-            logger.warning("Docker availability check failed: %s", exc)
-            return False
+    def _get_semaphore(self) -> asyncio.Semaphore:
+        """Lazily initialize event-loop bound semaphore restricting max active containers."""
+        current_loop = asyncio.get_running_loop()
+        if not hasattr(self, "_sem_loop") or self._sem_loop != current_loop:
+            self._sem_loop = current_loop
+            self._sem = asyncio.Semaphore(8)
+        return self._sem
+
+    def _get_check_lock(self) -> asyncio.Lock:
+        """Lazily initialize event-loop bound mutex for serializing Docker daemon info checks."""
+        current_loop = asyncio.get_running_loop()
+        if not hasattr(self, "_lock_loop") or self._lock_loop != current_loop:
+            self._lock_loop = current_loop
+            self._check_lock = asyncio.Lock()
+        return self._check_lock
+
+    async def is_docker_available(self, ttl: float = 5.0) -> bool:
+        """Check whether the local Docker daemon is running and responsive with TTL cache."""
+        now = time.monotonic()
+        if (
+            self._docker_available_cache is not None
+            and (now - self._docker_cache_timestamp) < ttl
+        ):
+            return self._docker_available_cache
+
+        async with self._get_check_lock():
+            now = time.monotonic()
+            if (
+                self._docker_available_cache is not None
+                and (now - self._docker_cache_timestamp) < ttl
+            ):
+                return self._docker_available_cache
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "docker",
+                    "info",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+                available = proc.returncode == 0
+            except Exception as exc:
+                logger.warning("Docker availability check failed: %s", exc)
+                available = False
+
+            self._docker_available_cache = available
+            self._docker_cache_timestamp = now
+            return available
 
     async def execute_code_once(
         self,
@@ -117,6 +155,9 @@ class SandboxService:
                 "Docker execution sandbox is offline or unavailable. "
                 "Student code execution is rejected for security. Please start Docker."
             )
+
+        sem = self._get_semaphore()
+        await sem.acquire()
 
         # 2. Create isolated ephemeral host directory for volume mount
         temp_dir = tempfile.mkdtemp(prefix="coderazz_sandbox_")
@@ -261,6 +302,7 @@ class SandboxService:
         finally:
             # Clean up host temporary files safely
             shutil.rmtree(temp_dir, ignore_errors=True)
+            sem.release()
 
     async def _force_kill_container(self, container_name: str) -> None:
         """Forcefully kill and remove a container by name."""
