@@ -237,11 +237,12 @@ async def seed_demo_data():
         valid_palindrome = problems.get("valid-palindrome")
 
         # 5. Check if submissions already exist for this class
-        existing_subs = await session.execute(
+        existing_res = await session.execute(
             select(Submission).where(Submission.user_id.in_([s.id for s in student_users]))
         )
-        if len(existing_subs.scalars().all()) >= 15:
-            print(f"• Class already has {len(existing_subs.scalars().all())} submissions seeded. Skipping submission generation.")
+        all_subs = existing_res.scalars().all()
+        if len(all_subs) >= 15:
+            print(f"• Class already has {len(all_subs)} submissions seeded. Skipping submission generation.")
             print("\nDemo environment is ready!")
             print(f"  Teacher Portal : {TEACHER_EMAIL} / {DEFAULT_PASSWORD}")
             print(f"  Class Join Code: {class_group.join_code}")
