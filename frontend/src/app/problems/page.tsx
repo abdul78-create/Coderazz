@@ -185,6 +185,7 @@ export default function ProblemsPage() {
             <Link
               key={prob.id}
               href={`/problems/${prob.slug}`}
+              data-testid={`problem-card-${prob.slug}`}
               className="group p-6 rounded-2xl bg-slate-900/60 border border-slate-800/90 hover:border-blue-500/50 hover:bg-slate-900/90 transition-all flex flex-col justify-between relative overflow-hidden shadow-lg shadow-black/20"
             >
               <div className="space-y-3">

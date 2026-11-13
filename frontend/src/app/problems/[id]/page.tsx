@@ -449,6 +449,7 @@ export default function ProblemWorkspacePage() {
 
           <button
             type="button"
+            data-testid="run-code-button"
             disabled={isRunning || isSubmitting}
             onClick={handleRunCode}
             className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-all border border-slate-700 cursor-pointer"
@@ -468,6 +469,7 @@ export default function ProblemWorkspacePage() {
 
           <button
             type="button"
+            data-testid="submit-solution-button"
             disabled={isRunning || isSubmitting}
             onClick={handleSubmitSolution}
             className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-blue-500/20 disabled:opacity-50 transition-all cursor-pointer"
@@ -519,6 +521,7 @@ export default function ProblemWorkspacePage() {
               </button>
 
               <button
+                data-testid="hints-tab-button"
                 onClick={() => setActiveLeftTab("hints")}
                 className={`text-xs font-medium pb-2 pt-2 border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeLeftTab === "hints"
@@ -681,6 +684,7 @@ export default function ProblemWorkspacePage() {
                       return (
                         <div
                           key={tier.level}
+                          data-testid={`hint-tier-${tier.level}`}
                           className="rounded-xl border border-amber-500/40 bg-slate-950/80 overflow-hidden shadow-sm"
                         >
                           <button
@@ -707,6 +711,7 @@ export default function ProblemWorkspacePage() {
 
                             <div className="flex items-center gap-2">
                               <span
+                                data-testid="leak-guard-badge"
                                 className="hidden sm:inline-flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"
                                 title="Mathematically verified by SolutionLeakGuard"
                               >
@@ -845,6 +850,14 @@ export default function ProblemWorkspacePage() {
                 onMount={(editor, monaco) => {
                   editorRef.current = editor;
                   monacoRef.current = monaco;
+                  if (typeof window !== "undefined") {
+                    (window as any).__coderazz_editor = editor;
+                    (window as any).__coderazz_monaco = monaco;
+                    (window as any).__coderazz_set_code = (val: string) => {
+                      editor.setValue(val);
+                      setCode(val);
+                    };
+                  }
                 }}
                 onChange={(newVal) => setCode(newVal || "")}
                 options={{
@@ -979,7 +992,10 @@ export default function ProblemWorkspacePage() {
 
                   {/* High-Visibility Misconception Diagnosis Card */}
                   {activeDiagnosis && (
-                    <div className="p-4 rounded-xl bg-gradient-to-br from-amber-950/40 via-slate-900/90 to-purple-950/30 border border-amber-500/40 shadow-lg shadow-amber-950/20 space-y-3">
+                    <div
+                      data-testid="diagnosis-card"
+                      className="p-4 rounded-xl bg-gradient-to-br from-amber-950/40 via-slate-900/90 to-purple-950/30 border border-amber-500/40 shadow-lg shadow-amber-950/20 space-y-3"
+                    >
                       {/* Card Header */}
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 pb-2.5">
                         <div className="flex items-center gap-2.5">
@@ -988,7 +1004,10 @@ export default function ProblemWorkspacePage() {
                           </span>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                              <span
+                                data-testid="misconception-badge"
+                                className="font-mono text-xs font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30"
+                              >
                                 {activeDiagnosis.misconception_code}
                               </span>
                               <span className="text-xs font-semibold text-white">
@@ -1059,6 +1078,7 @@ export default function ProblemWorkspacePage() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
+                            data-testid="unlock-hint-button"
                             onClick={() => {
                               setActiveLeftTab("hints");
                               if (unlockedHints.length === 0) {
