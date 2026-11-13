@@ -1,5 +1,6 @@
 """Database models package."""
 
+from backend.app.models.hint import HintRequest, HintTier
 from backend.app.models.misconception import DetectorType, Diagnosis, MisconceptionTaxonomy
 from backend.app.models.problem import Problem, ProblemDifficulty, TestCase
 from backend.app.models.submission import Submission, SubmissionStatus, SubmissionVerdict
@@ -19,4 +20,6 @@ __all__ = [
     "MisconceptionTaxonomy",
     "Diagnosis",
     "DetectorType",
+    "HintRequest",
+    "HintTier",
 ]

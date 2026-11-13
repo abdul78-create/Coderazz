@@ -10,6 +10,7 @@ from backend.app.database import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
+    from backend.app.models.hint import HintRequest
     from backend.app.models.submission import Submission
     from backend.app.models.token import RefreshToken
 
@@ -84,6 +85,11 @@ class User(Base):
     )
     submissions: Mapped[List["Submission"]] = relationship(
         "Submission",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    hint_requests: Mapped[List["HintRequest"]] = relationship(
+        "HintRequest",
         back_populates="user",
         cascade="all, delete-orphan",
     )

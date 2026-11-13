@@ -10,6 +10,7 @@ from backend.app.database import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
+    from backend.app.models.hint import HintRequest
     from backend.app.models.misconception import Diagnosis
     from backend.app.models.problem import Problem
     from backend.app.models.user import User
@@ -129,6 +130,11 @@ class Submission(Base):
     )
     diagnoses: Mapped[list["Diagnosis"]] = relationship(
         "Diagnosis",
+        back_populates="submission",
+        cascade="all, delete-orphan",
+    )
+    hint_requests: Mapped[list["HintRequest"]] = relationship(
+        "HintRequest",
         back_populates="submission",
         cascade="all, delete-orphan",
     )
