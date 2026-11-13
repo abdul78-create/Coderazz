@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+.git
+.gitignore
+*.md
+playwright-report
+test-results
+e2e
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -343,3 +343,55 @@ erDiagram
 | Access Annotation Queue & Submit Labels | No | No | **Yes** | **Yes** |
 | Create Problems & Hidden Test Cases | No | **Yes** | No | **Yes** |
 | Manage Users & System Configuration | No | No | No | **Yes** |
+
+---
+
+## 9. Production Deployment Topology & Container Architecture
+
+```mermaid
+flowchart TD
+    subgraph Host["Host Environment (Docker Engine)"]
+        subgraph NetPublic["coderazz-public Network (Bridge)"]
+            Frontend["Next.js 15 App Router\n(Port 3000, UID 10001)"]
+            Backend["FastAPI + Gunicorn\n(Port 8000, UID 10001)"]
+        end
+
+        subgraph NetInternal["coderazz-internal Network (Isolated)"]
+            Postgres["PostgreSQL 16 DB\n(Port 5432, Internal)"]
+        end
+
+        subgraph RunnerSandboxes["Disposable Ephemeral Runner Sandboxes"]
+            Runner1["Runner Container\n(net=none, ro-root, pids=32)"]
+            RunnerN["Runner Container N\n(net=none, ro-root, pids=32)"]
+        end
+
+        DockerSock["/var/run/docker.sock\n(Mounted into Backend)"]
+    end
+
+    Client["Student & Teacher Browsers"] -->|HTTP / HTTPS| Frontend
+    Frontend -->|Internal HTTP| Backend
+    Backend -->|Async SQLAlchemy / asyncpg| Postgres
+    Backend -->|Docker CLI / Engine API| DockerSock
+    DockerSock -->|Spawns Ephemeral| RunnerSandboxes
+```
+
+### 9.1 Network Segmentation & Isolation Boundaries
+1. **`coderazz-internal` Network:**
+   - Dedicated private overlay/bridge network connecting the PostgreSQL database container and FastAPI backend.
+   - Database port 5432 is not bound to public host interfaces in production.
+2. **`coderazz-public` Network:**
+   - Public bridge network serving client requests to the Next.js frontend (port 3000) and API gateway (port 8000).
+3. **Sandbox Execution Network (`--network none`):**
+   - Runner containers (`coderazz-python-runner`) are strictly isolated with severed network connectivity (`--network none`).
+   - Sockets, DNS resolution, and outbound HTTP requests are rejected at the kernel packet filtering level.
+
+### 9.2 Non-Root Security Standards
+- **Frontend Container (`frontend/Dockerfile`):**
+  - Multi-stage Alpine Linux build with `output: "standalone"`.
+  - Runs under dedicated non-root user `nextjs:nodejs` (UID 10001).
+- **Backend Container (`backend/Dockerfile`):**
+  - Hardened Python 3.12 Slim base.
+  - Runs under dedicated user `coderazz:coderazz` (UID 10001) added to host docker group to communicate with Docker daemon.
+  - Multi-process WSGI/ASGI server via Gunicorn pre-fork worker model (`-w 4 -k uvicorn.workers.UvicornWorker`).
+- **Execution Runners:**
+  - Strictly non-root (`uid=10001:10001`), read-only root filesystems, dropped Linux capabilities (`--cap-drop=ALL`), and `no-new-privileges` flag enforced on every invocation.

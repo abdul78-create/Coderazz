@@ -1,0 +1,112 @@
+# ==============================================================================
+# CodeRazz — Production Deployment Orchestration (docker-compose.prod.yml)
+# 100% Free & Open-Source Stack: Next.js 15 + FastAPI + PostgreSQL 16 + Docker Sandbox
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. PostgreSQL 16 Database (Isolated Internal Network)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: coderazz_postgres_prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-coderazz_prod_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coderazz_prod_secure_password_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-coderazz_prod_db}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    networks:
+      - coderazz-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-coderazz_prod_user} -d ${POSTGRES_DB:-coderazz_prod_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 2. FastAPI Backend Service (Gunicorn Multi-Worker + Sandbox Orchestrator)
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: coderazz_backend_prod
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      PORT: 8000
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-coderazz_prod_user}:${POSTGRES_PASSWORD:-coderazz_prod_secure_password_2026}@postgres:5432/${POSTGRES_DB:-coderazz_prod_db}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-coderazz_prod_user}:${POSTGRES_PASSWORD:-coderazz_prod_secure_password_2026}@postgres:5432/${POSTGRES_DB:-coderazz_prod_db}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-prod_jwt_super_secure_signing_key_minimum_32_bytes_2026}
+      CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:8000"]'
+      DOCKER_HOST: unix:///var/run/docker.sock
+      EXECUTION_IMAGE: coderazz-runner:latest
+    volumes:
+      # Mount host Docker daemon socket for spawning isolated, disposable runner containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      # Bound strictly to localhost loopback for reverse-proxy or local demonstration access
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - coderazz-internal
+      - coderazz-public
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+
+  # ----------------------------------------------------------------------------
+  # 3. Next.js 15 Standalone Frontend Service
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    container_name: coderazz_frontend_prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - coderazz-public
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+# ------------------------------------------------------------------------------
+# Network Topology Isolation & Persistence
+# ------------------------------------------------------------------------------
+networks:
+  # Internal network: Severed from external ingress, database is unreachable from the outside
+  coderazz-internal:
+    internal: true
+  # Public bridge network: Connects frontend and backend ingress
+  coderazz-public:
+    driver: bridge
+
+volumes:
+  postgres_prod_data:
+    name: coderazz_postgres_prod_data

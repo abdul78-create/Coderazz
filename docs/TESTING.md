@@ -56,13 +56,17 @@ Before any public submission is accepted, the sandbox is evaluated against an ad
 - RBAC permissions: Ensuring students cannot call teacher analytics or annotator queues.
 
 ### 2.5 End-to-End Tests (`frontend/e2e/` via Playwright)
-- Student logs in, navigates to Problem Library, selects "Sum of Digits".
+- Student logs in, navigates to Problem Library, selects "Two Sum".
 - Student types buggy code in Monaco Editor with an off-by-one loop error (`A1`).
-- Student clicks "Run & Submit".
+- Student clicks "Submit Solution" against real backend and Docker sandbox runner.
 - UI renders test-case failures and the diagnosed misconception badge: *"Off-by-one in loop bounds (A1)"*.
-- Student clicks "Request Hint", receiving Level 1 Nudge.
-- Student clicks "Request Next Hint", unlocking Level 2 Conceptual Hint.
-- Teacher logs in, views Class Heatmap, verifying the recorded `A1` misconception increment.
+- Student opens Hint Ladder and unlocks Level 1 Nudge with verified `🛡️ Leak Guard OK` badge.
+- Verified in headless browser via Playwright (`frontend/e2e/student_workflow.spec.ts`).
+
+### 2.6 Concurrency Stress Tests (`tests/stress/`)
+- Asynchronous multi-client stress suite firing 25 concurrent execution requests at `POST /api/v1/submissions/run`.
+- Tests concurrency semaphore handling, loop-bound process safety, and absence of host starvation.
+- Asserts 100% execution completion without HTTP 500 server crashes and asserts zero orphan Docker containers (`docker ps -a --filter name=coderazz-run-`).
 
 ---
 

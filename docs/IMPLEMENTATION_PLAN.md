@@ -268,11 +268,42 @@ flowchart TD
 ---
 
 ### Phase 7: System Hardening, Stress Testing & Demonstration
-- [ ] **Security Hardening:**
-  - Verify container rlimits and security profiles under stress.
-  - Submit adversarial code payloads (fork bombs, system file reads, socket connections) and verify sandbox containment.
-- [ ] **End-to-End Verification:**
-  - Automated Playwright browser tests covering full student submission -> diagnosis -> hint progression -> teacher heatmap.
-- [ ] **Documentation & Setup Scripts:**
-  - Comprehensive `README.md` with zero-to-running local instructions.
-  - `scripts/seed_demo_data.py` to seed sample classes, students, problems, and analytics for live demonstration.
+- [x] **Automated Demo Data Seeder (`scripts/seed_demo_data.py`):**
+  - Fully idempotent, cross-database seeder supporting PostgreSQL 16 on port 5433 and SQLite development fallback.
+  - Generates realistic classroom demonstration environment:
+    - Teacher: `teacher@coderazz.org` (`TeacherPass123!`).
+    - ClassGroup: `CS101: Introduction to Python` with join code `PYTHON`.
+    - 5 Enrolled Students: `student1@coderazz.org` through `student5@coderazz.org` (`StudentPass123!`).
+    - 22 Submissions simulated across 14-day longitudinal timeline across 5 starter problems (`two-sum`, `reverse-string`, `count-vowels`, `fizz-buzz`, `valid-palindrome`).
+    - Seeded diagnoses covering `A1` (Off-by-one), `D4` (Return in loop accumulator), `A3` (Index out of range), and `S2` (Novel/Unclassified).
+    - 14 Progressive Hint requests with penalty tracking and SolutionLeakGuard validation badges.
+    - 3 Annotation tasks (1 novel `S2`, 1 low-confidence `D4`, 1 human-resolved ground truth) to fully populate Teacher Analytics and Queue.
+- [x] **Concurrency & Sandbox Stress Testing (`tests/stress/test_sandbox_concurrency.py`):**
+  - Asynchronous stress suite executing 25 simultaneous container execution requests against `POST /api/v1/submissions/run`.
+  - Implemented loop-bound `asyncio.Semaphore(8)` in `backend/app/services/sandbox.py` to prevent host CPU starvation and burst subprocess saturation.
+  - Implemented 5.0-second TTL caching on `is_docker_available` to eliminate redundant Docker daemon probing under heavy load.
+  - Zero HTTP 500 server crashes under 25 concurrent requests.
+  - Verified Docker cleanup guarantees: zero lingering containers or orphan processes following concurrent bursts.
+  - Hostile attack payloads (fork bombs, infinite loops, memory spikes) contained within isolated sandboxes.
+- [x] **Playwright End-to-End Browser Testing (`frontend/e2e/student_workflow.spec.ts`):**
+  - Configured Playwright with automated Next.js frontend (`localhost:3000`) and FastAPI backend (`localhost:8001`) webServer lifecycle management.
+  - Full end-to-end user journey verified:
+    1. Student sign-in at `/login` with session state initialization.
+    2. Navigation to Problem Library (`/problems`) and selection of `Two Sum`.
+    3. Monaco code editor initialization and injection of student Python code containing `A1` off-by-one loop bug.
+    4. Execution via "Submit Solution" against real backend and Docker sandbox runner.
+    5. Real-time diagnosis display in UI: Misconception card with `A1` badge, detector type, and pedagogical remedy.
+    6. Progressive Hint Ladder interaction: unlocking Level 1 Socratic nudge with `🛡️ Leak Guard OK` validation badge.
+  - Zero test flakes; verified passing in headless browser test suite.
+- [x] **Production Deployment Orchestration (`docker-compose.prod.yml`, `backend/Dockerfile`, `frontend/Dockerfile`):**
+  - Backend multi-worker Dockerfile: Python 3.12 Slim, non-root user `coderazz:coderazz` (UID 10001), Docker CLI tools, Gunicorn pre-fork worker manager with Uvicorn workers (`gunicorn -w 4 -k uvicorn.workers.UvicornWorker`).
+  - Frontend standalone Dockerfile: Node 22 Alpine, multi-stage build (deps, builder, runner), `output: "standalone"`, non-root user `nextjs:nodejs` (UID 10001), container health probes.
+  - Production Compose (`docker-compose.prod.yml`):
+    - PostgreSQL 16 Alpine on internal isolated network `coderazz-internal`.
+    - FastAPI Backend on `coderazz-internal` and `coderazz-public`, mounting Docker socket `/var/run/docker.sock` to orchestrate disposable runner containers.
+    - Next.js 15 Frontend on `coderazz-public` exposing port 3000.
+    - Resource constraints (CPU/memory quotas) and healthchecks on all services.
+- [x] **Comprehensive Documentation & Setup:**
+  - Updated `README.md` with complete zero-to-running local installation instructions, architecture overview, and demo account credentials.
+  - Updated `docs/ARCHITECTURE.md` with production container orchestration topology and network isolation specifications.
+  - Updated `docs/TESTING.md` with stress testing and Playwright E2E execution instructions.

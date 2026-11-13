@@ -1,0 +1,21 @@
+# CodeRazz Backend Core Production Dependencies (100% Free & Open-Source)
+fastapi==0.162.5
+uvicorn[standard]==0.54.0
+gunicorn==23.0.0
+pydantic==2.14.3
+pydantic-settings==2.16.2
+sqlalchemy==2.1.8
+asyncpg==0.32.0
+psycopg[binary]==3.3.9
+aiosqlite==0.22.1
+alembic==1.20.1
+argon2-cffi==25.1.0
+pyjwt==2.15.1
+scikit-learn==1.9.1
+numpy==2.5.4
+scipy==1.18.1
+joblib==1.6.0
+httpx==0.28.1
+email-validator==2.3.0
+python-dotenv==1.2.4
+pyyaml==6.0.3

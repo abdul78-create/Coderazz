@@ -36,7 +36,7 @@ def run_harness():
         try:
             with open(input_path, "rb") as f:
                 input_data = f.read()
-        except Exception as e:
+        except OSError as e:
             input_data = str(e).encode()
 
     start_time = time.perf_counter()
@@ -73,7 +73,7 @@ def run_harness():
 
             usage = resource.getrusage(resource.RUSAGE_CHILDREN)
             memory_kb = usage.ru_maxrss
-        except Exception:
+        except (ImportError, OSError):
             memory_kb = 0
 
         result = {
@@ -85,12 +85,12 @@ def run_harness():
             "truncated": truncated,
             "error": None if proc.returncode == 0 else f"Process exited with code {proc.returncode}",
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
         result = {
             "exit_code": 1,
             "stdout": "",
-            "stderr": f"Harness execution failure: {str(exc)}",
+            "stderr": f"Harness execution failure: {exc!s}",
             "runtime_ms": elapsed_ms,
             "memory_kb": 0,
             "truncated": False,

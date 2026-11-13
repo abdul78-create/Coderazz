@@ -81,19 +81,69 @@ Student code is treated as strictly untrusted:
    ```bash
    docker compose up -d db
    ```
-3. Initialize Backend & Run Tests:
+3. Initialize Backend & Apply Migrations:
    ```bash
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    pip install -r backend/requirements.txt
-   pytest
+   alembic upgrade head
+   python scripts/seed_taxonomy.py
+   python scripts/seed_problems.py
    ```
-4. Start Frontend:
+4. Seed Demonstration Classroom (Optional but Recommended):
+   ```bash
+   python scripts/seed_demo_data.py
+   ```
+5. Start FastAPI Backend:
+   ```bash
+   uvicorn backend.app.main:app --reload --port 8000
+   ```
+6. Start Next.js Frontend:
    ```bash
    cd frontend
    npm install
    npm run dev
    ```
+
+### 👥 Demo Accounts
+
+| Role | Email | Password | Access / Purpose |
+|---|---|---|---|
+| **Teacher** | `teacher@coderazz.org` | `TeacherPass123!` | Manages `CS101` class (code `PYTHON`), views struggle trends, reviews queue |
+| **Student 1** | `student1@coderazz.org` | `StudentPass123!` | Active learner enrolled in `CS101`, solves problems, unlocks hints |
+| **Student 2-5** | `student2@coderazz.org`..`student5@coderazz.org` | `StudentPass123!` | Cohort learners with simulated submission history |
+| **Admin** | `admin@coderazz.org` | `AdminPass123!` | System configuration and user management |
+
+### 🚢 Production Deployment Orchestration
+
+For production deployment with multi-worker Gunicorn backend, standalone Next.js frontend, and isolated database network:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## 🧪 Verification & Test Suites
+
+- **Unit & Integration Suite (119 tests):**
+  ```bash
+  pytest tests/unit tests/integration -v
+  ```
+- **Concurrency Stress Test (25 concurrent runs):**
+  ```bash
+  pytest tests/stress/test_sandbox_concurrency.py -v
+  ```
+- **Playwright End-to-End Browser Test:**
+  ```bash
+  npm --prefix frontend run test:e2e
+  ```
+- **Code Linter & Typechecks:**
+  ```bash
+  ruff check .
+  npm --prefix frontend run typecheck
+  npm --prefix frontend run build
+  ```
 
 ---
 
