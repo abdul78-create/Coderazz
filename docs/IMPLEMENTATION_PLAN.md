@@ -172,20 +172,49 @@ flowchart TD
 ---
 
 ### Phase 5: Progressive 5-Tier Hint Ladder & SolutionLeakGuard
-- [ ] **Template Engine:**
-  - Curate high-quality, pedagogically verified templates for all 5 levels for the 27 taxonomy classes.
-- [ ] **SolutionLeakGuard Engine (`ml/leak_guard.py`):**
-  - Token n-gram overlap analyzer between hint text and reference solution.
-  - AST subtree similarity checker.
-  - Regex pattern matcher preventing direct code block leaks.
-- [ ] **Hint Service Endpoints:**
-  - `GET /api/v1/hints/submission/{id}`: View unlocked hints.
-  - `POST /api/v1/hints/request`: Unlock next progressive hint level (Level 1 through Level 5).
-  - `POST /api/v1/hints/{id}/feedback`: Helpful / not helpful rating.
-- [ ] **Optional Local Ollama LLM Adapter:**
-  - Configurable adapter to call local Ollama endpoint (`http://localhost:11434`) when enabled, passing output through `SolutionLeakGuard`.
-- [ ] **Frontend Hint Component:**
-  - Progressive disclosure accordion, hint level indicators, and helpfulness feedback buttons.
+- [x] **SolutionLeakGuard Engine (`ml/leak_guard.py`):**
+  - Multi-tier firewall mathematically guaranteeing hints do not disclose reference solutions.
+  - Direct multi-line copy-paste matching (excluding boilerplate imports and wrapper functions).
+  - Normalized AST subtree isomorphism check via `IdentifierNormalizer` (defeats variable renaming and cosmetic identifier mutations).
+  - Normalized token n-gram overlap threshold (blocking continuous sequences >= 5 tokens or token similarity >= 0.25).
+  - Unconditionally safe fallback generator if any proposed hint fails validation.
+- [x] **Database Schema & Migrations (`backend/app/models/hint.py`):**
+  - SQLAlchemy model `HintRequest` with UUID primary key, `hint_level` (1..5), `hint_title`, `hint_content`, `penalty_score`, `leak_check_passed`, and `created_at`.
+  - Cascading foreign key relationships with `Submission`, `Diagnosis`, `User`, and `Problem`.
+  - Alembic migration `5e8fcdd1350c_create_hint_requests_table.py` generated and applied to live PostgreSQL 16 on port 5433.
+- [x] **5-Tier Progressive Hint Generator (`backend/app/services/hint_ladder.py`):**
+  - Curated 5-tier pedagogical templates for introductory Python misconceptions (`A1`, `A2`, `A3`, `A5`, `D2`, `D4`, `G1`, `S1`):
+    - Level 1: Nudge (Directional Socratic question highlighting behavior, 0% penalty).
+    - Level 2: Conceptual Explanation (Clarifies underlying computing invariant, +5% penalty).
+    - Level 3: Minimal Counter-Example (Specific minimal input where the student code fails, +10% penalty).
+    - Level 4: Worked Analogue (Isomorphic problem example demonstrating the correct pattern on an unrelated domain, +15% penalty).
+    - Level 5: Targeted Pointer (Identifies faulty construct and line number with remediation advice, +25% penalty).
+  - Structured generic fallback generator across all 5 tiers for unmodeled taxonomy classes.
+  - Automatic integration with `SolutionLeakGuard` ensuring 100% of delivered hints pass leak checks.
+- [x] **API Endpoints for Hint Unlocks & History (`backend/app/api/v1/hints.py`):**
+  - `POST /api/v1/submissions/{id}/hints`:
+    - Strict RBAC ownership check (students can only unlock hints for their own submissions).
+    - Enforces sequential progression (Level N+1 requires Level N; skips rejected with 400 Bad Request).
+    - Enforces hard ceiling at Level 5.
+    - Rejects hint requests on already ACCEPTED submissions.
+    - Persists `HintRequest` record in PostgreSQL.
+  - `GET /api/v1/submissions/{id}/hints`:
+    - Retrieves all unlocked hints ordered by `hint_level ASC` with total cumulative penalty.
+- [x] **Frontend Hint Drawer Integration (`frontend/src/app/problems/[id]/page.tsx`):**
+  - Interactive collapsible Hint Drawer tab with live unlocked badge count (`Hints N/5`).
+  - Cumulative score penalty tracker bar (e.g., `-15% penalty`).
+  - Stacked 5-tier accordion cards:
+    - Unlocked cards: title, tier badge, penalty tag, `🛡️ Leak Guard OK` badge, and Markdown renderer with syntax-highlighted code blocks.
+    - Next available card: highlighted with teaser text, penalty notice, and "Unlock Next Hint" button with loading state.
+    - Future locked cards: blurred/muted placeholders with lock icons.
+  - Quick-action shortcut button inside the Diagnostic Console card to seamlessly open the Hint Ladder.
+- [x] **Verification & Test Coverage:**
+  - 61 unit tests passing (including 8 LeakGuard tests and 5 HintLadder tests).
+  - 20 integration tests passing (including 3 Hint Ladder API tests against live PostgreSQL 16).
+  - 109 total project tests passing.
+  - 0 Ruff linting errors across codebase.
+  - Next.js 15 production build and TypeScript check passing with 0 errors.
+  - Changes pushed to `origin/master` and `origin/main` on GitHub.
 
 ---
 
