@@ -101,6 +101,7 @@ class CompareFact:
     comparators_str: list[str] = field(default_factory=list)
     has_assignment_in_test: bool = False
     bool_ops: list[str] = field(default_factory=list)  # "And" | "Or" | "Not"
+    has_truthy_constant_in_boolop: bool = False
 
 
 @dataclass
@@ -461,6 +462,22 @@ class CodeStructuralVisitor(ast.NodeVisitor):
                 comparators_str=comparators_str,
             )
         )
+        self.generic_visit(node)
+
+    def visit_BoolOp(self, node: ast.BoolOp) -> None:
+        op_name = type(node.op).__name__
+        has_truthy = any(
+            isinstance(v, ast.Constant) and v.value not in (True, False, None)
+            for v in node.values
+        )
+        if has_truthy:
+            self.facts.compares.append(
+                CompareFact(
+                    lineno=node.lineno,
+                    bool_ops=[op_name],
+                    has_truthy_constant_in_boolop=True,
+                )
+            )
         self.generic_visit(node)
 
     def visit_If(self, node: ast.If) -> None:
