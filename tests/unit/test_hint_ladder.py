@@ -117,7 +117,7 @@ def test_generic_fallback_for_unmodeled_misconceptions(hint_service: HintLadderS
     )
 
     assert hint.hint_level == 2
-    assert hint.hint_tier_name == "Conceptual Explanation"
+    assert hint.hint_tier_name == TIER_NAMES[2]
     assert "Unnecessary duplicate sort" in hint.hint_title
     assert "Avoid sorting a list that is already ordered." in hint.hint_content
     assert hint.leak_check_passed is True

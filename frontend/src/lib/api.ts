@@ -167,6 +167,28 @@ export interface SubmissionListItem {
   created_at: string;
 }
 
+export interface HintRecord {
+  id: string;
+  submission_id: string;
+  user_id: string;
+  problem_id: string;
+  diagnosis_id?: string | null;
+  hint_level: number;
+  hint_tier_name: string;
+  hint_title: string;
+  hint_content: string;
+  penalty_score: number;
+  leak_check_passed: boolean;
+  created_at: string;
+}
+
+export interface HintListResult {
+  submission_id: string;
+  total_penalty: number;
+  max_unlocked_level: number;
+  hints: HintRecord[];
+}
+
 export interface DatabaseStatus {
   status: "connected" | "unhealthy" | "disconnected";
   mode: "postgresql" | "sqlite";
@@ -416,6 +438,39 @@ export const api = {
   ): Promise<SubmissionRecord> {
     return fetchFromApi<SubmissionRecord>(
       `/api/v1/submissions/${submissionId}`,
+      {},
+      token
+    );
+  },
+
+  /**
+   * Unlock the next progressive pedagogical hint for a submission.
+   */
+  async unlockNextHint(
+    submissionId: string,
+    token: string,
+    desiredLevel?: number
+  ): Promise<HintRecord> {
+    const payload = desiredLevel ? { desired_level: desiredLevel } : {};
+    return fetchFromApi<HintRecord>(
+      `/api/v1/submissions/${submissionId}/hints`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      token
+    );
+  },
+
+  /**
+   * Retrieve all unlocked pedagogical hints for a submission.
+   */
+  async getHints(
+    submissionId: string,
+    token: string
+  ): Promise<HintListResult> {
+    return fetchFromApi<HintListResult>(
+      `/api/v1/submissions/${submissionId}/hints`,
       {},
       token
     );
