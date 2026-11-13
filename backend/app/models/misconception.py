@@ -10,6 +10,7 @@ from backend.app.database import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
+    from backend.app.models.annotation import AnnotationTask
     from backend.app.models.hint import HintRequest
     from backend.app.models.submission import Submission
 
@@ -142,5 +143,9 @@ class Diagnosis(Base):
     )
     hint_requests: Mapped[list["HintRequest"]] = relationship(
         "HintRequest",
+        back_populates="diagnosis",
+    )
+    annotation_tasks: Mapped[list["AnnotationTask"]] = relationship(
+        "AnnotationTask",
         back_populates="diagnosis",
     )

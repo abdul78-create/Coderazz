@@ -1,5 +1,6 @@
 """Database models package."""
 
+from backend.app.models.annotation import AnnotationTask, AnnotationTaskStatus
 from backend.app.models.hint import HintRequest, HintTier
 from backend.app.models.misconception import DetectorType, Diagnosis, MisconceptionTaxonomy
 from backend.app.models.problem import Problem, ProblemDifficulty, TestCase
@@ -26,4 +27,6 @@ __all__ = [
     "ClassGroup",
     "ClassEnrollment",
     "generate_join_code",
+    "AnnotationTask",
+    "AnnotationTaskStatus",
 ]

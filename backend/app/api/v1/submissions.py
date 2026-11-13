@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from backend.app.core.dependencies import get_current_user
 from backend.app.database import get_db
+from backend.app.models.annotation import AnnotationTask, AnnotationTaskStatus
 from backend.app.models.misconception import Diagnosis, MisconceptionTaxonomy
 from backend.app.models.problem import Problem, TestCase
 from backend.app.models.submission import Submission, SubmissionStatus, SubmissionVerdict
@@ -300,6 +301,24 @@ async def submit_code(
             await db.commit()
             await db.refresh(db_diagnosis)
             diag_record.id = db_diagnosis.id
+
+            # Auto-spawn Annotation Task if confidence is low (< 0.50) or novel (S2)
+            if fused.misconception_code == "S2" or fused.confidence < 0.50:
+                trigger = (
+                    "NOVEL_MISCONCEPTION (S2)"
+                    if fused.misconception_code == "S2"
+                    else f"LOW_CONFIDENCE ({fused.confidence:.2f} < 0.50)"
+                )
+                annotation_task = AnnotationTask(
+                    submission_id=new_submission.id,
+                    diagnosis_id=db_diagnosis.id,
+                    status=AnnotationTaskStatus.PENDING,
+                    original_misconception_code=fused.misconception_code,
+                    original_confidence=fused.confidence,
+                    trigger_reason=trigger,
+                )
+                db.add(annotation_task)
+                await db.commit()
         except Exception:
             pass
 
