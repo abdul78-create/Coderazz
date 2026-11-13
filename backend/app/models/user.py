@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from backend.app.models.hint import HintRequest
+    from backend.app.models.roster import ClassEnrollment, ClassGroup
     from backend.app.models.submission import Submission
     from backend.app.models.token import RefreshToken
 
@@ -91,6 +92,16 @@ class User(Base):
     hint_requests: Mapped[List["HintRequest"]] = relationship(
         "HintRequest",
         back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    taught_classes: Mapped[List["ClassGroup"]] = relationship(
+        "ClassGroup",
+        back_populates="teacher",
+        cascade="all, delete-orphan",
+    )
+    class_enrollments: Mapped[List["ClassEnrollment"]] = relationship(
+        "ClassEnrollment",
+        back_populates="student",
         cascade="all, delete-orphan",
     )
 
