@@ -124,30 +124,50 @@ flowchart TD
 ---
 
 ### Phase 4: Hybrid Misconception Detection Engine
-- [ ] **Taxonomy Formalization:**
-  - Seed database with all 30 authoritative core taxonomy classes (`A1` through `G3`) plus `S1` (slip) and `S2` (novel).
-- [ ] **AST Analysis Engine (`ml/ast_analyzer.py`):**
-  - Implement AST visitor scanning for syntax constructs, loop boundaries, return positions, mutable default arguments, and index expressions.
-- [ ] **Top-10 Core Rule Detectors (`ml/rule_detectors.py`):**
-  - `A1`: Off-by-one in loop bounds.
-  - `A2`: Infinite loop condition.
-  - `A3`: Index out of range.
-  - `A5`: Premature loop termination (`return`/`break` inside loop body).
-  - `B1`: Assignment in condition.
-  - `B2`: Inverted boolean operators.
-  - `C1`: Uninitialized variable usage.
-  - `D2`: Missing explicit return in fruitful function.
-  - `D4`: Return placed inside loop accumulator.
-  - `G1`: Confusing `print()` with `return`.
-- [ ] **Diagnostic Probe Generator (`ml/prober.py`):**
-  - Generate micro-test probes (empty list, 1 element, duplicate items) to isolate ambiguous failure causes.
-- [ ] **Scikit-learn Baseline Classifier (`ml/classifier.py`):**
-  - Feature extraction pipeline (AST node counts + token n-grams).
-  - Trained lightweight model with calibrated probability outputs.
-- [ ] **Confidence Aggregator:**
-  - Fuses rule detections, probe results, and ML probabilities to produce primary diagnosis with line-level evidence.
-- [ ] **Verification:**
-  - Unit test suite against synthetic and curated buggy programs validating accuracy.
+- [x] **Taxonomy Formalization:**
+  - SQLAlchemy models for `MisconceptionTaxonomy` and `Diagnosis` with `DetectorType` enum.
+  - Seed database with all 30 authoritative core taxonomy classes (`A1` through `G3`) plus `S1` (slip) and `S2` (novel) totaling 32 classes.
+  - Idempotent seeder verified against PostgreSQL 16 on port 5433 and SQLite fallback.
+  - Alembic migration `f61a2e16bbd5_create_misconception_taxonomy_and_.py` applied.
+- [x] **AST Analysis Engine (`ml/ast_analyzer.py`):**
+  - Implement AST visitor strictly extracting decoupled structural facts (loop boundaries, condition mutations, return positions, uninitialized reads, mutable default parameters, and subscripts).
+- [x] **Top-10 Core Rule Detectors (`ml/rule_detectors.py`):**
+  - High-precision, zero-false-positive deterministic detectors for:
+    - `A1`: Off-by-one in loop bounds.
+    - `A2`: Infinite loop condition.
+    - `A3`: Index out of range.
+    - `A5`: Premature loop termination (`return`/`break` inside loop body).
+    - `B1`: Assignment in condition.
+    - `B2`: Inverted boolean operators.
+    - `C1`: Uninitialized variable usage.
+    - `D2`: Missing explicit return in fruitful function.
+    - `D4`: Return placed inside loop accumulator.
+    - `G1`: Confusing `print()` with `return`.
+    - `S1`: Syntax error precedence rule (confidence 1.0).
+- [x] **Diagnostic Probe Generator (`ml/prober.py`):**
+  - Generate micro-test boundary probes (`empty_input`, `single_element`, `duplicate_elements`, `zero_boundary`, `negative_value`) to isolate ambiguous failures.
+  - Executed inside isolated Docker runner container enforcing `--pids-limit 32`, 128 MB RAM, and 1.5s timeout.
+- [x] **Scikit-learn Baseline Classifier (`ml/classifier.py`):**
+  - Feature extraction pipeline combining AST node distributions and token n-gram TF-IDF.
+  - Trained lightweight `LogisticRegression` pipeline with probability calibration across taxonomy classes.
+- [x] **Multi-Source Fusion Engine (`ml/fusion.py`):**
+  - Priority hierarchy:
+    1. S1 Syntax Error Precedence (1.0 confidence)
+    2. AST Deterministic Rules (confidence >= 0.90)
+    3. Sandbox Micro-Probes (confidence >= 0.90)
+    4. Statistical ML Classifier (confidence >= 0.40)
+    5. S2 Novel / Unclassified fallback (0.30 confidence)
+- [x] **API & UI Integration:**
+  - `POST /api/v1/submissions` diagnoses non-accepted submissions and persists `Diagnosis` records in PostgreSQL.
+  - `POST /api/v1/submissions/run` returns diagnosis on interactive run failure.
+  - `GET /api/v1/submissions/{id}` returns eager-loaded diagnoses.
+  - Monaco editor line decorations highlighting faulty `evidence_lines` with click-to-jump.
+  - Responsive Misconception Diagnosis card displaying taxonomy badge, confidence score, detector type, diagnostic explanation, and pedagogical remedy guidance.
+- [x] **Verification:**
+  - 48 unit tests passing (covering AST analysis, rule detectors, prober, classifier, fusion, config, and security).
+  - 17 integration tests passing (including end-to-end diagnosis API submission tests and real Docker execution).
+  - 0 Ruff linting errors across codebase.
+  - Frontend typecheck and Next.js 15 production build passing with 0 errors.
 
 ---
 
