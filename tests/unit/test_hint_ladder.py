@@ -138,3 +138,4 @@ def test_invalid_hint_level_raises_error(hint_service: HintLadderService) -> Non
             misconception_code="A1",
             reference_solution=TWO_SUM_SOLUTION,
         )
+

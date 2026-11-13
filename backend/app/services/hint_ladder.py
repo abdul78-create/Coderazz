@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Penalties associated with progressive hint levels
 TIER_PENALTIES = {
-    1: 0.02,
+    1: 0.00,
     2: 0.05,
     3: 0.10,
     4: 0.15,
@@ -27,11 +27,11 @@ TIER_PENALTIES = {
 }
 
 TIER_NAMES = {
-    1: "Nudge",
-    2: "Conceptual Explanation",
-    3: "Minimal Counter-Example",
-    4: "Worked Analogue",
-    5: "Targeted Pointer",
+    1: "Level 1: Nudge",
+    2: "Level 2: Conceptual Explanation",
+    3: "Level 3: Counter-Example",
+    4: "Level 4: Worked Analogue",
+    5: "Level 5: Targeted Pointer",
 }
 
 
@@ -487,9 +487,13 @@ class HintLadderService:
         if templates_for_code and hint_level in templates_for_code:
             template = templates_for_code[hint_level]
             raw_title = template["title"]
-            raw_content = template["content"].format(
-                problem_title=problem_title or "this problem",
-                evidence_callout=evidence_callout or "Inspect your loop and conditional structure.",
+            raw_content = (
+                template["content"]
+                .replace("{problem_title}", problem_title or "this problem")
+                .replace(
+                    "{evidence_callout}",
+                    evidence_callout or "Inspect your loop and conditional structure.",
+                )
             )
         else:
             # Generic fallback template across 5 tiers
