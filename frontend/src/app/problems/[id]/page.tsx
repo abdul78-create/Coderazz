@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Maximize2,
   Sparkles,
+  BookOpen,
 } from "lucide-react";
 import {
   api,
@@ -29,6 +30,7 @@ import {
   SubmissionRecord,
   SubmissionListItem,
   SubmissionVerdict,
+  DiagnosisResult,
 } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
 
@@ -65,6 +67,15 @@ export default function ProblemWorkspacePage() {
   const [submissionsList, setSubmissionsList] = useState<SubmissionListItem[]>([]);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
+  // Monaco Editor references for line decorations and navigation
+  const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+  const decorationsRef = useRef<string[]>([]);
+
+  // Active diagnosed misconception from either interactive run or submission
+  const activeDiagnosis: DiagnosisResult | undefined =
+    submissionResult?.diagnosis || runResult?.diagnosis;
+
   useEffect(() => {
     const storedToken = authStorage.getAccessToken();
     setToken(storedToken);
@@ -93,6 +104,39 @@ export default function ProblemWorkspacePage() {
         .catch(() => {});
     }
   }, [token, problem, submissionResult]);
+
+  // Update Monaco line decorations whenever a new diagnosis is emitted
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current) return;
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+
+    if (activeDiagnosis && activeDiagnosis.evidence_lines && activeDiagnosis.evidence_lines.length > 0) {
+      const newDecorations = activeDiagnosis.evidence_lines.map((lineNum) => ({
+        range: new monaco.Range(lineNum, 1, lineNum, 1),
+        options: {
+          isWholeLine: true,
+          className: "bg-amber-500/15 border-l-4 border-amber-500",
+          glyphMarginClassName: "text-amber-400 font-bold",
+          hoverMessage: {
+            value: `**[${activeDiagnosis.misconception_code}] ${activeDiagnosis.misconception_name || "Misconception Detected"}**\n\n${activeDiagnosis.explanation || ""}\n\n*Confidence: ${(activeDiagnosis.confidence_score * 100).toFixed(0)}%*`,
+          },
+        },
+      }));
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations);
+      editor.revealLineInCenter(activeDiagnosis.evidence_lines[0]);
+    } else {
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+    }
+  }, [activeDiagnosis]);
+
+  const handleJumpToLine = (lineNum: number) => {
+    if (editorRef.current) {
+      editorRef.current.revealLineInCenter(lineNum);
+      editorRef.current.setPosition({ lineNumber: lineNum, column: 1 });
+      editorRef.current.focus();
+    }
+  };
 
   const handleRunCode = async () => {
     if (!token) {
@@ -132,6 +176,11 @@ export default function ProblemWorkspacePage() {
     if (problem) {
       setCode(problem.starter_code);
       setErrorBanner(null);
+      setRunResult(null);
+      setSubmissionResult(null);
+      if (editorRef.current) {
+        decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
+      }
     }
   };
 
@@ -388,6 +437,10 @@ export default function ProblemWorkspacePage() {
                 language="python"
                 theme="vs-dark"
                 value={code}
+                onMount={(editor, monaco) => {
+                  editorRef.current = editor;
+                  monacoRef.current = monaco;
+                }}
                 onChange={(newVal) => setCode(newVal || "")}
                 options={{
                   minimap: { enabled: false },
@@ -397,13 +450,14 @@ export default function ProblemWorkspacePage() {
                   wordWrap: "on",
                   automaticLayout: true,
                   padding: { top: 12, bottom: 12 },
+                  glyphMargin: true,
                 }}
               />
             </div>
           </div>
 
           {/* Bottom Half: Test Case & Console Results Drawer */}
-          <div className="h-56 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shrink-0">
+          <div className="h-72 min-h-[260px] bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shrink-0">
             {/* Drawer Tabs Header */}
             <div className="h-9 border-b border-slate-800 px-4 flex items-center justify-between bg-slate-950/60 shrink-0 text-xs">
               <div className="flex items-center gap-3">
@@ -432,21 +486,43 @@ export default function ProblemWorkspacePage() {
                 >
                   <span>Custom Input</span>
                 </button>
+
+                {/* Misconception Alert Badge */}
+                {activeDiagnosis && (
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-mono animate-pulse">
+                    <AlertCircle className="h-3 w-3 text-amber-400" />
+                    <span>Misconception: {activeDiagnosis.misconception_code}</span>
+                  </span>
+                )}
               </div>
 
               {/* Status info */}
-              {runResult && (
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border ${verdictBadge(
-                      runResult.verdict
-                    )}`}
-                  >
-                    {runResult.verdict}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">{runResult.runtime_ms}ms</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {runResult && (
+                  <>
+                    <span
+                      className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border ${verdictBadge(
+                        runResult.verdict
+                      )}`}
+                    >
+                      {runResult.verdict}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">{runResult.runtime_ms}ms</span>
+                  </>
+                )}
+                {submissionResult && !runResult && (
+                  <>
+                    <span
+                      className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border ${verdictBadge(
+                        submissionResult.verdict
+                      )}`}
+                    >
+                      {submissionResult.verdict}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">{submissionResult.runtime_ms}ms</span>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Drawer Body */}
@@ -489,10 +565,97 @@ export default function ProblemWorkspacePage() {
               )}
 
               {activeBottomTab === "console" && (
-                <div className="space-y-2 h-full flex flex-col justify-between">
+                <div className="space-y-3 h-full flex flex-col justify-start">
                   {errorBanner && (
                     <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-xs">
                       {errorBanner}
+                    </div>
+                  )}
+
+                  {/* High-Visibility Misconception Diagnosis Card */}
+                  {activeDiagnosis && (
+                    <div className="p-4 rounded-xl bg-gradient-to-br from-amber-950/40 via-slate-900/90 to-purple-950/30 border border-amber-500/40 shadow-lg shadow-amber-950/20 space-y-3">
+                      {/* Card Header */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 pb-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            <Sparkles className="h-4 w-4" />
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                                {activeDiagnosis.misconception_code}
+                              </span>
+                              <span className="text-xs font-semibold text-white">
+                                {activeDiagnosis.misconception_name || "Misconception Identified"}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400">
+                              Category: {activeDiagnosis.misconception_category || "General"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+                            {(activeDiagnosis.confidence_score * 100).toFixed(0)}% Confidence
+                          </span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300">
+                            {activeDiagnosis.detector_type.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Explanation */}
+                      {activeDiagnosis.explanation && (
+                        <div className="text-xs text-slate-200 leading-relaxed font-sans bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                          <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider block mb-1">
+                            Diagnostic Analysis
+                          </span>
+                          <p>{activeDiagnosis.explanation}</p>
+                        </div>
+                      )}
+
+                      {/* Pedagogical Remedy */}
+                      {activeDiagnosis.pedagogical_remedy && (
+                        <div className="text-xs text-indigo-200 leading-relaxed font-sans bg-indigo-950/30 p-3 rounded-lg border border-indigo-500/30">
+                          <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider block mb-1 flex items-center gap-1.5">
+                            <BookOpen className="h-3.5 w-3.5 text-indigo-400" />
+                            How to Think About This (Pedagogical Guidance)
+                          </span>
+                          <p className="whitespace-pre-line text-slate-300">
+                            {activeDiagnosis.pedagogical_remedy}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Evidence Lines and Focus Action */}
+                      {activeDiagnosis.evidence_lines && activeDiagnosis.evidence_lines.length > 0 && (
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+                            <span>Faulty line(s):</span>
+                            {activeDiagnosis.evidence_lines.map((ln) => (
+                              <button
+                                key={ln}
+                                type="button"
+                                onClick={() => handleJumpToLine(ln)}
+                                className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 font-bold transition-colors cursor-pointer"
+                                title="Click to jump to line in editor"
+                              >
+                                Line {ln}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleJumpToLine(activeDiagnosis.evidence_lines![0])}
+                            className="text-[11px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 transition-colors"
+                          >
+                            <span>Jump to code</span>
+                            <ChevronRight className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 

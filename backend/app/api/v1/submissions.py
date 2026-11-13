@@ -5,12 +5,14 @@ from typing import List, Optional
 
 from backend.app.core.dependencies import get_current_user
 from backend.app.database import get_db
+from backend.app.models.misconception import Diagnosis, MisconceptionTaxonomy
 from backend.app.models.problem import Problem, TestCase
 from backend.app.models.submission import Submission, SubmissionStatus, SubmissionVerdict
 from backend.app.models.user import User, UserRole
 from backend.app.schemas.submission import (
     CodeRunRequest,
     CodeRunResponse,
+    DiagnosisResponse,
     SubmissionCreateRequest,
     SubmissionListItemResponse,
     SubmissionResponse,
@@ -21,11 +23,46 @@ from backend.app.services.sandbox import (
     sandbox_service,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from ml.fusion import FusedDiagnosis, MisconceptionFusionEngine
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 router = APIRouter(prefix="/submissions", tags=["Code Execution & Submissions"])
+fusion_engine = MisconceptionFusionEngine()
+
+
+async def _diagnose_and_build_response(
+    code: str,
+    db: AsyncSession,
+) -> tuple[FusedDiagnosis, DiagnosisResponse]:
+    """Diagnose code through the Fusion Engine and enrich with taxonomy metadata."""
+    fused = await fusion_engine.diagnose(source_code=code, sandbox=sandbox_service)
+    tax_query = select(MisconceptionTaxonomy).where(
+        MisconceptionTaxonomy.code == fused.misconception_code
+    )
+    tax_res = await db.execute(tax_query)
+    taxonomy = tax_res.scalar_one_or_none()
+
+    detector_str = (
+        fused.detector_type.value
+        if hasattr(fused.detector_type, "value")
+        else str(fused.detector_type)
+    )
+
+    diag_resp = DiagnosisResponse(
+        misconception_code=fused.misconception_code,
+        misconception_name=taxonomy.name if taxonomy else fused.misconception_code,
+        misconception_category=taxonomy.category if taxonomy else "General",
+        confidence_score=fused.confidence,
+        detector_type=detector_str,
+        is_primary=True,
+        evidence_lines=fused.evidence_lines,
+        explanation=fused.explanation,
+        pedagogical_remedy=taxonomy.pedagogical_remedy if taxonomy else None,
+        secondary_candidates=fused.secondary_candidates,
+    )
+    return fused, diag_resp
 
 
 @router.post(
@@ -52,6 +89,13 @@ async def run_code_interactively(
                 detail=str(exc),
             ) from exc
 
+        diag_custom: Optional[DiagnosisResponse] = None
+        if run_result.verdict != SubmissionVerdict.ACCEPTED:
+            try:
+                _, diag_custom = await _diagnose_and_build_response(payload.code, db)
+            except Exception:
+                pass
+
         return CodeRunResponse(
             verdict=run_result.verdict,
             stdout=run_result.stdout,
@@ -75,6 +119,7 @@ async def run_code_interactively(
                     stderr=run_result.stderr,
                 )
             ],
+            diagnosis=diag_custom,
         )
 
     # 2. Problem sample test cases execution
@@ -127,6 +172,13 @@ async def run_code_interactively(
 
     first_err = summary.first_failing_test_case.stderr if summary.first_failing_test_case else None
 
+    diag_sample: Optional[DiagnosisResponse] = None
+    if summary.overall_verdict != SubmissionVerdict.ACCEPTED:
+        try:
+            _, diag_sample = await _diagnose_and_build_response(payload.code, db)
+        except Exception:
+            pass
+
     return CodeRunResponse(
         verdict=summary.overall_verdict,
         stdout=(
@@ -141,6 +193,7 @@ async def run_code_interactively(
         total_test_cases=summary.total_test_cases,
         error_message=first_err,
         test_cases=summary.test_case_results,
+        diagnosis=diag_sample,
     )
 
 
@@ -228,6 +281,28 @@ async def submit_code(
     await db.commit()
     await db.refresh(new_submission)
 
+    # If submission failed evaluation, diagnose misconception and persist to database
+    diag_record: Optional[DiagnosisResponse] = None
+    if summary.overall_verdict != SubmissionVerdict.ACCEPTED:
+        try:
+            fused, diag_record = await _diagnose_and_build_response(payload.code, db)
+            db_diagnosis = Diagnosis(
+                submission_id=new_submission.id,
+                misconception_code=fused.misconception_code,
+                confidence_score=fused.confidence,
+                detector_type=fused.detector_type,
+                is_primary=True,
+                evidence_lines=fused.evidence_lines,
+                explanation=fused.explanation,
+                metadata_json=fused.metadata,
+            )
+            db.add(db_diagnosis)
+            await db.commit()
+            await db.refresh(db_diagnosis)
+            diag_record.id = db_diagnosis.id
+        except Exception:
+            pass
+
     return SubmissionResponse(
         id=new_submission.id,
         problem_id=problem.id,
@@ -246,6 +321,8 @@ async def submit_code(
         created_at=new_submission.created_at,
         problem_title=problem.title,
         problem_slug=problem.slug,
+        diagnosis=diag_record,
+        diagnoses=[diag_record] if diag_record else [],
     )
 
 
@@ -308,6 +385,9 @@ async def get_submission(
     query = (
         select(Submission, Problem.title, Problem.slug)
         .join(Problem, Submission.problem_id == Problem.id)
+        .options(
+            selectinload(Submission.diagnoses).selectinload(Diagnosis.misconception)
+        )
         .where(Submission.id == submission_id)
     )
     result = await db.execute(query)
@@ -331,6 +411,29 @@ async def get_submission(
             ),
         )
 
+    diagnoses_resp: List[DiagnosisResponse] = []
+    primary_diag: Optional[DiagnosisResponse] = None
+    for d in sub.diagnoses:
+        d_resp = DiagnosisResponse(
+            id=d.id,
+            misconception_code=d.misconception_code,
+            misconception_name=d.misconception.name if d.misconception else d.misconception_code,
+            misconception_category=d.misconception.category if d.misconception else "General",
+            confidence_score=d.confidence_score,
+            detector_type=(
+                d.detector_type.value
+                if hasattr(d.detector_type, "value")
+                else str(d.detector_type)
+            ),
+            is_primary=d.is_primary,
+            evidence_lines=d.evidence_lines,
+            explanation=d.explanation,
+            pedagogical_remedy=d.misconception.pedagogical_remedy if d.misconception else None,
+        )
+        diagnoses_resp.append(d_resp)
+        if d.is_primary and primary_diag is None:
+            primary_diag = d_resp
+
     return SubmissionResponse(
         id=sub.id,
         problem_id=sub.problem_id,
@@ -349,4 +452,6 @@ async def get_submission(
         created_at=sub.created_at,
         problem_title=prob_title,
         problem_slug=prob_slug,
+        diagnosis=primary_diag or (diagnoses_resp[0] if diagnoses_resp else None),
+        diagnoses=diagnoses_resp,
     )

@@ -2,11 +2,29 @@
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from backend.app.models.submission import SubmissionStatus, SubmissionVerdict
 from backend.app.services.sandbox import TestCaseExecutionResult
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class DiagnosisResponse(BaseModel):
+    """Diagnosed programming misconception details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: Optional[uuid.UUID] = None
+    misconception_code: str
+    misconception_name: Optional[str] = None
+    misconception_category: Optional[str] = None
+    confidence_score: float
+    detector_type: str
+    is_primary: bool = True
+    evidence_lines: Optional[List[int]] = None
+    explanation: Optional[str] = None
+    pedagogical_remedy: Optional[str] = None
+    secondary_candidates: Optional[List[dict[str, Any]]] = None
 
 
 class CodeRunRequest(BaseModel):
@@ -31,6 +49,7 @@ class CodeRunResponse(BaseModel):
     total_test_cases: int
     error_message: Optional[str] = None
     test_cases: List[TestCaseExecutionResult] = []
+    diagnosis: Optional[DiagnosisResponse] = None
 
 
 class SubmissionCreateRequest(BaseModel):
@@ -63,6 +82,8 @@ class SubmissionResponse(BaseModel):
     created_at: datetime
     problem_title: Optional[str] = None
     problem_slug: Optional[str] = None
+    diagnosis: Optional[DiagnosisResponse] = None
+    diagnoses: List[DiagnosisResponse] = []
 
 
 class SubmissionListItemResponse(BaseModel):

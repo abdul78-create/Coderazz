@@ -100,6 +100,25 @@ export interface TestCaseResult {
   explanation?: string;
 }
 
+export interface DiagnosisResult {
+  id?: string;
+  misconception_code: string;
+  misconception_name?: string;
+  misconception_category?: string;
+  confidence_score: number;
+  detector_type: string;
+  is_primary?: boolean;
+  evidence_lines?: number[];
+  explanation?: string;
+  pedagogical_remedy?: string;
+  secondary_candidates?: Array<{
+    code: string;
+    confidence: number;
+    detector?: string;
+    explanation?: string;
+  }>;
+}
+
 export interface CodeRunResult {
   verdict: SubmissionVerdict;
   stdout: string;
@@ -110,6 +129,7 @@ export interface CodeRunResult {
   total_test_cases: number;
   error_message?: string;
   test_cases: TestCaseResult[];
+  diagnosis?: DiagnosisResult;
 }
 
 export interface SubmissionRecord {
@@ -130,6 +150,8 @@ export interface SubmissionRecord {
   created_at: string;
   problem_title?: string;
   problem_slug?: string;
+  diagnosis?: DiagnosisResult;
+  diagnoses?: DiagnosisResult[];
 }
 
 export interface SubmissionListItem {
